@@ -74,6 +74,138 @@ jobs will first be submitted to the `batch` or `preempt` queue, whichever is ava
 nextflow run main.nf -profile tufts_hpc -params-file tuftshpc-params.yaml
 ```
 
+### Running on Harvard HSPH / FASRC (Cannon)
+
+The `harvard_rc` profile submits jobs to the `hsph` SLURM partition using the hutlab module system — no containers needed.
+
+**Tool stack:** KneadData 0.12 · MetaPhlAn 4.0.6 (`mpa_vOct22_CHOCOPhlAnSGB_202403`) · HUMAnN 3.9 — compatible with baqlava.
+
+#### Prerequisites (one-time, already set up for the lab)
+
+```sh
+source /n/huttenhower_lab/tools/hutlab/src/hutlabrc_rocky8.sh
+hutlab load rocky8/biobakery-workflows-nextflow/0.0.1
+```
+
+#### Basic run
+
+```sh
+nextflow run main.nf \
+  -profile harvard_rc \
+  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
+  --readsdir /path/to/fastqs \
+  --outdir /path/to/output
+```
+
+For **single-end** data, add `--paired_end false --filepattern "*.fastq.gz"`.
+
+**Quick demo run** using the included single-end test sample (`test/single_end_rawfastq/HD32R1_subsample.fastq.gz`):
+
+```sh
+nextflow run main.nf \
+  -profile harvard_rc \
+  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
+  --readsdir test/single_end_rawfastq \
+  --filepattern "*.fastq.gz" \
+  --paired_end false \
+  --outdir test/results
+```
+
+To also run baqlava viral profiling on the demo sample (which has 0 prescreen species, so bypass depletion is needed):
+
+```sh
+nextflow run main.nf \
+  -profile harvard_rc \
+  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
+  --readsdir test/single_end_rawfastq \
+  --filepattern "*.fastq.gz" \
+  --paired_end false \
+  --outdir test/results \
+  --run_baqlava true \
+  --baqlava_bypass_depletion true
+```
+
+To **resume** an interrupted run (Nextflow caches completed steps):
+
+```sh
+nextflow run main.nf -profile harvard_rc \
+  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  -resume
+```
+
+#### Changing resources (memory, CPUs, time)
+
+Per-tool resource defaults live in the `harvard_rc` block of `nextflow.config`.
+Find the relevant `withName` block and edit the values:
+
+```groovy
+// nextflow.config — harvard_rc profile
+withName: humann {
+    memory = '64.G'   // default: 32.G
+    cpus   = 16       // default: 8
+    time   = '24.h'   // default: 12.h
+}
+```
+
+You can also override any resource on the command line without editing `nextflow.config`:
+
+```sh
+nextflow run main.nf -profile harvard_rc \
+  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  --max_memory 64.GB --max_cpus 16
+```
+
+#### Changing databases
+
+Every database path and version is controlled by a named parameter.
+All defaults live in `/n/huttenhower_lab/tools/nextflow/harvard_rc.yaml` and can be overridden on the command line with `--<param_name> <value>` without editing any file.
+
+| Parameter | Tool | What it controls | Default on Harvard FASRC |
+|---|---|---|---|
+| `--human_genome` | KneadData | Host-decontamination reference directory | `/n/huttenhower_lab/data/kneaddata_databases/hg38` |
+| `--metaphlan_db` | MetaPhlAn | Directory containing the MetaPhlAn bowtie2 index + pkl | `/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
+| `--metaphlan_index` | MetaPhlAn | Database index name (must exist inside `metaphlan_db`) | `mpa_vJun23_CHOCOPhlAnSGB_202307` |
+| `--metaphlan_version` | MetaPhlAn | CLI flag style: `metaphlan_v4` (uses `--db_dir`/`--mapout`) or `metaphlan_v3` (uses `--bowtie2db`/`--bowtie2out`). **Harvard FASRC:** hutlab MetaPhlAn builds (4.0.6 and 4.1.1) use v3-style flags, so use `metaphlan_v3` here. | `metaphlan_v3` (Harvard RC) |
+| `--humann_db` | HUMAnN | Parent directory; pipeline appends `/chocophlan`, `/uniref`, `/utility_mapping` | `/n/huttenhower_lab/tools/nextflow/databases/humann3` |
+| `--humann_version` | HUMAnN | Output file naming: `humann_v37` (HUMAnN 3.x) or `humann_v4a` (HUMAnN 4) | `humann_v37` |
+
+**Examples:**
+
+```sh
+# Switch to mouse kneaddata reference
+nextflow run main.nf -profile harvard_rc \
+  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
+  --human_genome /n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
+  --readsdir /path/to/fastqs --outdir /path/to/output
+
+# Switch to ribosomal RNA decontamination
+nextflow run main.nf -profile harvard_rc \
+  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
+  --human_genome /n/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2 \
+  --readsdir /path/to/fastqs --outdir /path/to/output
+
+# Use HUMAnN4 databases (also update beforeScript in nextflow.config to load rocky8/humann4/4.0-alpha-1)
+nextflow run main.nf -profile harvard_rc \
+  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
+  --humann_version humann_v4a \
+  --humann_db /n/huttenhower_lab/tools/nextflow/databases/humann4 \
+  --readsdir /path/to/fastqs --outdir /path/to/output
+```
+
+#### Available databases on Harvard FASRC
+
+| Tool | Reference | Path |
+|---|---|---|
+| KneadData | Human hg38 | `/n/huttenhower_lab/data/kneaddata_databases/hg38` |
+| KneadData | Mouse C57BL | `/n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL` |
+| KneadData | Ribosomal RNA | `/n/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2` |
+| MetaPhlAn | `mpa_vJun23_CHOCOPhlAnSGB_202307` (default) | `/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
+| MetaPhlAn | `mpa_vOct22_CHOCOPhlAnSGB_202403` | `/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.0.6_vOct_fixed/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
+| HUMAnN 3.9 | ChocoPhlAn + UniRef90 | `/n/huttenhower_lab/tools/nextflow/databases/humann3` |
+| HUMAnN 4 | nucleotide + protein | `/n/huttenhower_lab/tools/nextflow/databases/humann4` |
+
 ### Running on AWS
 
 The AWS setup is too complicated to describe here for the moment,
@@ -187,7 +319,20 @@ This pipeline supports the following versions of MetaPhlAn and HUMAnN:
 
 ## Testing the pipeline
 
-There are some raw fastq files in `test/` which can be processed through the pipeline
+Test fastq files are in `test/`:
+
+| Directory | Contents | Use for |
+|---|---|---|
+| `test/rawfastq/` | Paired-end samples | Paired-end pipeline test |
+| `test/single_end_rawfastq/` | `FG00004_S26_R1.fastq.gz`, `HD32R1_subsample.fastq.gz` | Single-end pipeline test; `HD32R1_subsample` is a small demo sample from the [bioBakery tutorial](https://github.com/biobakery/biobakery_workflows/tree/master/examples/tutorial/input) |
+
+To run a quick end-to-end test locally (standard profile):
+
+```sh
+nextflow run main.nf -profile standard -params-file template-params.yaml
+```
+
+See the **Harvard HSPH / FASRC** section above for a cluster test run using `HD32R1_subsample.fastq.gz`.
 
 ## Using the `template-params.yaml` file
 

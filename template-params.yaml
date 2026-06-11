@@ -56,3 +56,51 @@ humann_db: "/volume/biobakery_databases/humann"
 # metaphlan_index: "mpa_vOct22_CHOCOPhlAnSGB_202403"
 # humann_db: "s3://biobakery-databases/humann_databases/chocophlan"
 
+
+# Harvard HSPH / FASRC (Cannon) params
+# Tool stack: KneadData 0.12 + MetaPhlAn 4.1.1 (mpa_vJun23_CHOCOPhlAnSGB_202307) + HUMAnN 3.9
+# BAQLaVa 0.5.0 viral profiling is optional (requires HUMAnN 3.9).
+#
+# Full annotated params file: /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml
+#
+# Prerequisites:
+#   source /n/huttenhower_lab/tools/hutlab/src/hutlabrc_rocky8.sh
+#   hutlab load rocky8/biobakery-workflows-nextflow/0.0.1
+#
+# Run (paired-end):
+#   nextflow run main.nf -profile harvard_rc \
+#     -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
+#     --readsdir /path/to/fastqs --outdir /path/to/output
+#
+# Run (single-end):
+#   nextflow run main.nf -profile harvard_rc \
+#     -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
+#     --readsdir /path/to/fastqs --filepattern "*.fastq.gz" --paired_end false \
+#     --outdir /path/to/output
+#
+# Any param below can be overridden on the command line: --param_name value
+
+# readsdir: "/path/to/your/fastqs"
+# outdir:   "/path/to/output"
+
+# paired_end:  true                       # true for R1+R2, false for single-end
+# filepattern: "*_R{1,2}*.fastq.gz"       # paired-end pattern
+# filepattern: "*.fastq.gz"               # single-end pattern
+
+# metaphlan_version: "metaphlan_v3"       # hutlab MetaPhlAn 4.x uses v3-style flags
+# metaphlan_db:      "/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases"
+# metaphlan_index:   "mpa_vJun23_CHOCOPhlAnSGB_202307"
+
+# human_genome: "/n/huttenhower_lab/data/kneaddata_databases/hg38"
+# # Mouse:      "/n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL"
+# # rRNA:       "/n/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2"
+
+# humann_version: "humann_v37"
+# humann_db:      "/n/huttenhower_lab/tools/nextflow/databases/humann3"
+# # HUMAnN4:   humann_version: "humann_v4a"
+# #            humann_db: "/n/huttenhower_lab/tools/nextflow/databases/humann4"
+# #            (also update beforeScript in nextflow.config to load rocky8/humann4/4.0-alpha-1)
+
+# run_baqlava:              false          # true to enable BAQLaVa viral profiling
+# baqlava_bypass_depletion: false          # true only for test/tiny samples (0 prescreen species)
+

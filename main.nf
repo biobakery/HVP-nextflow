@@ -5,6 +5,7 @@ nextflow.enable.dsl=2
 include { single_end_kneaddata; paired_end_kneaddata } from "${projectDir}/processes/kneaddata.nf"
 include { metaphlan; metaphlan_bzip} from "${projectDir}/processes/metaphlan.nf"
 include { humann} from "${projectDir}/processes/humann.nf"
+include { baqlava } from "${projectDir}/processes/baqlava.nf"
 
 
 
@@ -39,4 +40,9 @@ include { humann} from "${projectDir}/processes/humann.nf"
     metaphlan_out =         metaphlan(knead_out.sample, knead_out.kneads)
     metaphlan_bzip_out =    metaphlan_bzip(metaphlan_out.sample, metaphlan_out.sam)
     humann_out =            humann(metaphlan_out.sample, knead_out.kneads, metaphlan_out.profile)
+
+    // optional viral profiling — enable with --run_baqlava true
+    if (params.run_baqlava) {
+        baqlava(humann_out.sample, knead_out.kneads, metaphlan_out.profile)
+    }
     }
