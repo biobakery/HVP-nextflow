@@ -2,6 +2,7 @@ test/output/*
 .nextflow*
 work/*
 output/*
+.DS_Store
 
 # run logs
 test/tutorial_run.log
