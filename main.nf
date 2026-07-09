@@ -1,48 +1,54 @@
 #!/usr/bin/env nextflow
-
 nextflow.enable.dsl=2
 
-include { single_end_kneaddata; paired_end_kneaddata } from "${projectDir}/processes/kneaddata.nf"
-include { metaphlan; metaphlan_bzip} from "${projectDir}/processes/metaphlan.nf"
-include { humann} from "${projectDir}/processes/humann.nf"
-include { baqlava } from "${projectDir}/processes/baqlava.nf"
+// ── Workflow imports ───────────────────────────────────────────────────────
+include { MGX }          from './workflows/mgx.nf'
+include { MTX }          from './workflows/mtx.nf'
+include { MGX_MTX }      from './workflows/mgx_mtx.nf'
+include { SIXTEENS }     from './workflows/sixteens.nf'
+include { VIS }          from './workflows/vis.nf'
+include { STATS }        from './workflows/stats.nf'
+include { SGB_PIPELINE } from './workflows/sgb_pipeline.nf'
 
+// ── Router ─────────────────────────────────────────────────────────────────
+workflow {
 
-
-    // main workflow
-    workflow {
-        
-        // paired-end reads workflow
-        if (params.paired_end == true){
-            println "Running paired_end_workflow"
-            read_ch = Channel.fromFilePairs("${params.readsdir}/${params.filepattern}", checkIfExists: true)
-            knead_out     =         paired_end_kneaddata(read_ch)
-            } 
-        
-         // single-end reads workflow
-        else if (params.paired_end == false){
-            println "Running single_end_workflow"
-            read_ch = Channel
-                .fromPath("${params.readsdir}/${params.filepattern}", checkIfExists: true)
-                .map { file -> 
-                    def sample = file.baseName.replaceFirst(/(\.fastq|\.fq)$/, '')  // ERR3405856.fastq -> ERR3405856
-                    return tuple(sample, file)
-                }
-
-            knead_out     =         single_end_kneaddata(read_ch)
-
-            }
-            else {
-            throw new Exception("The paired_end must be bool true or false, got '${params.paired_end}'")
-            }
-    
-    // all read types are processed with metaphlan/humann processes
-    metaphlan_out =         metaphlan(knead_out.sample, knead_out.kneads)
-    metaphlan_bzip_out =    metaphlan_bzip(metaphlan_out.sample, metaphlan_out.sam)
-    humann_out =            humann(metaphlan_out.sample, knead_out.kneads, metaphlan_out.profile)
-
-    // optional viral profiling — enable with --run_baqlava true
-    if (params.run_baqlava) {
-        baqlava(humann_out.sample, knead_out.kneads, metaphlan_out.profile)
+    // Validate required params for read-based workflows
+    if (!params.readsdir && params.workflow in ['mgx', 'mtx', 'mgx_mtx', '16s', 'sgb_pipeline']) {
+        error "ERROR: --readsdir is required. Example: --readsdir /path/to/fastqs"
     }
+
+    switch (params.workflow) {
+
+        case 'mgx':
+            MGX()
+            break
+
+        case 'mtx':
+            MTX()
+            break
+
+        case 'mgx_mtx':
+            MGX_MTX()
+            break
+
+        case '16s':
+            SIXTEENS()
+            break
+
+        case 'vis':
+            VIS()
+            break
+
+        case 'stats':
+            STATS()
+            break
+
+        case 'sgb_pipeline':
+            SGB_PIPELINE()
+            break
+
+        default:
+            error "Unknown workflow '${params.workflow}'. Choose: mgx | mtx | mgx_mtx | 16s | vis | stats | sgb_pipeline"
     }
+}

@@ -1,424 +1,830 @@
-# Nextflow pipeline for running the bioBakery
+# biobakery-nextflow
+
+> Nextflow implementation of the [bioBakery](https://github.com/biobakery) metagenomics suite,
+> ported from the [anadama2 biobakery-workflows](https://github.com/biobakery/biobakery_workflows)
+> with multi-cluster support, nf-core-style modules, and an SGB assembly pipeline.
 
 ![Static Badge](https://img.shields.io/badge/Author-Kevin_Bonham_PhD-purple)
 ![Static Badge](https://img.shields.io/badge/Author-Guilherme_Fahur_Bottino_PhD-purple)
 ![Static Badge](https://img.shields.io/badge/Author-Danielle_Pinto-purple)
 
-[bioBakery](https://github.com/biobakery): software, documentation,
-and tutorials for microbial community profiling (created and mantained by the Huttenhower lab)
+---
 
-- [`KneadData`](https://github.com/biobakery/kneaddata): 
-  a data quality-control pipeline that trims low quality reads
-  and removes host genomic data within our metagenomic samples.
-  Particularly, this pipeline uses a database containing a reference human genome
-  so that all human DNA is removed from the samples.
-  Link to more information here: (https://huttenhower.sph.harvard.edu/kneaddata/).
-- [`MetaPhlAn`](https://github.com/biobakery/MetaPhlAn): 
-  a computational tool for species-level microbial profiling (bacteria, archaea, eukaryotes, and viruses)
-  from metagenomic shotgun sequencing data.
-  Link to more information here:(https://huttenhower.sph.harvard.edu/metaphlan)
-- [`HUMAnN`](https://github.com/biobakery/humann): 
-  a pipeline for efficiently and accurately profiling the presence/absence and abundance of microbial pathways
-  in a community from metagenomic or metatranscriptomic sequencing data
-  (typically millions of short DNA/RNA reads).
-  This process, referred to as functional profiling,
-  aims to describe the metabolic potential of a microbial community and its members.
-  Link to more information here:(https://huttenhower.sph.harvard.edu/humann)
+## Table of Contents
 
-## Environment setup
+1. [Overview](#overview)
+2. [Workflow Architecture](#workflow-architecture)
+3. [Tools & Versions](#tools--versions)
+4. [Installation & Environment Setup](#installation--environment-setup)
+   - [Harvard FASRC (Cannon)](#harvard-fasrc-cannon)
+   - [Tufts HPC](#tufts-hpc)
+   - [AWS Batch](#aws-batch)
+   - [Local / Docker](#local--docker)
+5. [Quick Start](#quick-start)
+6. [Use Cases](#use-cases)
+7. [All Parameters](#all-parameters)
+8. [Compute Profiles](#compute-profiles)
+9. [Changing Databases](#changing-databases)
+10. [Changing Resources](#changing-resources)
+11. [Output Structure](#output-structure)
+12. [Testing](#testing)
 
-Instructions for setting up a local environment to run the pipeline
-can be found on Danielle's notebook [here](https://github.com/BonhamLab/daniellepinto/blob/main/PeriodicMeetings/2025-06-17.md#danielles-personal-notes). 
+---
 
-Computing environments on the Tufts HPC and AWS should already be set-up with container-based
-(docker, apptainer) or conda environments.
+## Overview
 
-## Running the pipeline
+Select a workflow with `--workflow`:
 
-This nextflow pipeline can be run on three different types of machines: 
-1) Locally
-2) Tufts high performance cluster (HPC)
-3) Amazon website services cloud (AWS)
+| `--workflow` | Status | Description |
+|---|---|---|
+| `mgx` *(default)* | ✅ Ready | Whole metagenome shotgun: QC + taxonomy + function |
+| `sgb_pipeline` | ✅ Ready | MAG assembly → binning → SGB clustering (ported from anadama2 `feature/sgb_pipeline`) |
+| `mgx_mtx` | 🚧 Partial | Paired MGX + MTX (runs MGX half) |
+| `mtx` | 🔜 Stub | Metatranscriptome |
+| `16s` | 🔜 Stub | 16S amplicon (DADA2 / QIIME2 planned) |
+| `vis` | 🔜 Stub | Quarto report generation |
+| `stats` | 🔜 Stub | MaAsLin2 / LEfSe / diversity |
 
-Based on the profiles described in `nextflow.config`,
-we can run the pipeline with the following Nextflow commands:
+---
 
+## Workflow Architecture
 
-### Running locally
+### MGX workflow
 
-```sh
-nextflow run main.nf -profile standard -params-file params.yaml`
+```mermaid
+flowchart TD
+    A[Raw FASTQ reads] --> B{paired_end?}
+    B -->|true| C[fromFilePairs]
+    B -->|false| D[fromPath]
+    C & D --> E[QUALITY_CONTROL\nKneadData]
+    E -->|run_qc=false: bypass| F{run_taxonomic_profiling?}
+    E --> F
+    F -->|yes| G[TAXONOMIC_PROFILING\nMetaPhlAn + merge]
+    G --> H{run_functional_profiling?}
+    H -->|yes| I[FUNCTIONAL_PROFILING\nHUMAnN → regroup → rename → merge]
+    G --> J{run_viral_profiling?}
+    J -->|yes| K[VIRAL_PROFILING\nBAQLaVa]
+    G --> L{run_strain_profiling?}
+    L -->|yes| M[STRAIN_PROFILING\nStrainPhlAn SGB mode]
+    F & H & J & L --> N[version_log\npipeline_info/]
+
+    style E fill:#4a90d9,color:#fff
+    style G fill:#7ab648,color:#fff
+    style I fill:#e8a838,color:#fff
+    style K fill:#c0392b,color:#fff
+    style M fill:#8e44ad,color:#fff
 ```
 
-> [!Note]
-> To be able to run the pipeline, you must have at least 15 GB of available memory (RAM). This is needed to run the memory-intensive mapping step in metaphlan. Anecdotally, a laptop with 16 GB RAM was insufficient to run the pipeline.
-> Additionally, it has been notoriously challenging to download the metaphlan databases. It is recommended to run this pipeline on the Tufts HPC, where the environment and databases have already been established. 
+### SGB Pipeline workflow
 
-### Running on the HPC
+```mermaid
+flowchart TD
+    A[Raw FASTQ reads] --> B[QUALITY_CONTROL\nKneadData]
+    B --> C[megahit\nDe novo assembly]
+    C --> D[align_and_depth\nBowtie2 + jgi_summarize]
+    D --> E[metabat2\nBin contigs into MAGs]
+    E --> F[checkm2\nMAG quality assessment]
+    E --> G[mag_n50\nN50 statistics]
+    F & G --> H[checkm2_wrangling\nFilter by completeness/contamination]
+    E --> I[phylophlan_metagenomic\nPhylogenetic placement to SGBs]
+    H & I --> J[mash_list_inputs\nSelect qualifying MAGs]
+    J --> K[mash_sketch + paste + dist\nPairwise genome distances]
+    K & H & I --> L[sgb_cluster\nCluster MAGs into SGBs]
+    L & H & I --> M[merge_tax_abundance\nFinal profile]
 
-Jobs on the Tufts HPC can be run in two different ways:
-
-- **Batch**: the job will be sent to the queue
-  and it will be completed based on how many resources you have requested,
-  current cluster load,
-  and fairshare (have you recently used the cluster) 
-- **Preempt**: this allows you to run your job using free nodes from another lab that paid for these compute resources.
-  However, if they attempt to queue a job, your job will be preempted and killed, so you'll have to resubmit it.
-
-With how the HPC environment is currently defined in `nextflow.config`,
-jobs will first be submitted to the `batch` or `preempt` queue, whichever is available first.
-
-- Prior to scheduling the job, make sure to load nextflow `module load nextflow` and add bin to your path (`export PATH="/cluster/tufts/bonhamlab/shared/bin:$PATH"`)
-
-```sh
-nextflow run main.nf -profile tufts_hpc -params-file tuftshpc-params.yaml
+    style B fill:#4a90d9,color:#fff
+    style C fill:#16a085,color:#fff
+    style D fill:#16a085,color:#fff
+    style E fill:#16a085,color:#fff
+    style F fill:#e67e22,color:#fff
+    style G fill:#e67e22,color:#fff
+    style I fill:#8e44ad,color:#fff
+    style L fill:#c0392b,color:#fff
+    style M fill:#27ae60,color:#fff
 ```
 
-### Running on Harvard HSPH / FASRC (Cannon)
+### Module / Subworkflow / Workflow layering
 
-The `harvard_rc` profile submits jobs to the `hsph` SLURM partition using the hutlab module system — no containers needed.
+```mermaid
+graph LR
+    subgraph Workflows["workflows/"]
+        W1[mgx.nf]
+        W2[mtx.nf]
+        W3[mgx_mtx.nf]
+        W4[sixteens.nf]
+        W5[vis.nf]
+        W6[stats.nf]
+        W7[sgb_pipeline.nf]
+    end
+    subgraph Subworkflows["subworkflows/"]
+        S1[quality_control.nf]
+        S2[taxonomic_profiling.nf]
+        S3[functional_profiling.nf]
+        S4[viral_profiling.nf]
+        S5[strain_profiling.nf]
+    end
+    subgraph Modules["modules/"]
+        M1[kneaddata/]
+        M2[metaphlan/]
+        M3[humann/]
+        M4[viral/baqlava/]
+        M5[strainphlan/]
+        M6[sgb_pipeline/megahit/]
+        M7[binning/metabat2/]
+        M8[qc/checkm2/]
+        M9[phylogenomics/phylophlan_metagenomic/]
+        M10[utils/mash/]
+        M11[utils/align_and_depth/]
+        M12[utils/humann_merge + regroup + rename]
+        M13[utils/version_log/]
+    end
+    W1 --> S1 & S2 & S3 & S4 & S5
+    W2 --> S1 & S2 & S3
+    W3 --> S1 & S2 & S3 & S4
+    W7 --> S1 & M6 & M7 & M8 & M9 & M10 & M11
+    S1 --> M1
+    S2 --> M2
+    S3 --> M3 & M12
+    S4 --> M4
+    S5 --> M5
+```
 
-**Tool stack:** KneadData 0.12 · MetaPhlAn 4.0.6 (`mpa_vOct22_CHOCOPhlAnSGB_202403`) · HUMAnN 3.9 — compatible with baqlava.
+### Diagram assets
 
-#### Prerequisites (one-time, already set up for the lab)
+All draw.io source files are in [`assets/diagrams/`](assets/diagrams/). Open with [draw.io](https://app.diagrams.net/) or the VS Code draw.io extension.
+
+| File | Description |
+|---|---|
+| [`architecture_overview.drawio`](assets/diagrams/architecture_overview.drawio) | Full layered architecture: main.nf → workflows → subworkflows → modules → conf |
+| [`mgx_workflow.drawio`](assets/diagrams/mgx_workflow.drawio) | MGX pipeline flowchart with feature flag branches |
+| [`sgb_pipeline.drawio`](assets/diagrams/sgb_pipeline.drawio) | SGB MAG assembly pipeline (9-step) |
+| [`mtx_workflow.drawio`](assets/diagrams/mtx_workflow.drawio) | MTX metatranscriptome pipeline (planned) |
+| [`mgx_mtx_workflow.drawio`](assets/diagrams/mgx_mtx_workflow.drawio) | Joint MGX+MTX integration workflow (partial) |
+| [`sixteens_workflow.drawio`](assets/diagrams/sixteens_workflow.drawio) | 16S amplicon pipeline via DADA2/QIIME2 (planned) |
+
+---
+
+## Tools & Versions
+
+| Tool | Purpose | Supported versions |
+|---|---|---|
+| [KneadData](https://github.com/biobakery/kneaddata) | Host decontamination + QC trimming | 0.12+ |
+| [MetaPhlAn](https://github.com/biobakery/MetaPhlAn) | Species-level taxonomic profiling | v3.1, v4.0.6, v4.1.1 |
+| [HUMAnN](https://github.com/biobakery/humann) | Functional pathway profiling | 3.7, 4.0-alpha |
+| [BAQLaVa](https://github.com/biobakery/baqlava) | Viral profiling | 0.5+ |
+| [StrainPhlAn](https://github.com/biobakery/MetaPhlAn) | Strain-level profiling (SGB mode) | bundled with MetaPhlAn 4 |
+| [MEGAHIT](https://github.com/voutcn/megahit) | De novo metagenome assembly | 1.2+ |
+| [MetaBAT2](https://bitbucket.org/berkeleylab/metabat) | MAG binning | 2.15+ |
+| [CheckM2](https://github.com/chklovski/CheckM2) | MAG quality assessment | 1.0+ |
+| [PhyloPhlAn](https://github.com/biobakery/phylophlan) | Phylogenetic MAG placement | 3.0+ |
+| [Mash](https://github.com/marbl/Mash) | Pairwise genome distance (SGB clustering) | 2.0+ |
+
+---
+
+## Installation & Environment Setup
+
+### Harvard FASRC (Cannon)
+
+Tools are pre-installed via the hutlab module system. No containers needed.
 
 ```sh
+# One-time setup (run once per login shell or add to ~/.bashrc)
 source /n/huttenhower_lab/tools/hutlab/src/hutlabrc_rocky8.sh
 hutlab load rocky8/biobakery-workflows-nextflow/0.0.1
+
+# Verify Nextflow is available
+nextflow -version
 ```
 
-#### Basic run
+Database paths are automatically loaded when you use `-profile harvard_rc`
+(from `conf/databases/harvard_rc.config`). No params file needed for defaults.
+
+---
+
+### Tufts HPC
+
+Tools are provided via Apptainer containers already configured in the `tufts_hpc` profile.
 
 ```sh
-nextflow run main.nf \
-  -profile harvard_rc \
-  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
+# Add Nextflow and shared binaries to PATH
+module load nextflow
+export PATH="/cluster/tufts/bonhamlab/shared/bin:$PATH"
+
+# Database paths are loaded from conf/databases/tufts.config
+```
+
+Create a params file for your run (see `template-params.yaml` for all options):
+
+```yaml
+# my-run-params.yaml
+readsdir: /path/to/my/fastqs
+outdir:   /path/to/results
+paired_end: true
+filepattern: "*_R{1,2}*.fastq.gz"
+```
+
+```sh
+nextflow run main.nf -profile tufts_hpc -params-file my-run-params.yaml
+```
+
+---
+
+### AWS Batch
+
+Requires prior setup of AMIs, job queues, S3 buckets, and ECR containers.
+ECR container URIs are already configured in `conf/profiles/aws.config`.
+
+```sh
+nextflow run main.nf -profile amazon -params-file params.yaml
+```
+
+See `conf/profiles/aws.config` for queue and container assignments per process.
+
+---
+
+### Local / Docker
+
+Requires all tools installed in your `$PATH` (conda recommended).
+
+```sh
+# Install via conda/mamba
+mamba create -n biobakery -c biobakery -c conda-forge \
+  kneaddata metaphlan=4 humann nextflow
+conda activate biobakery
+
+nextflow run main.nf -profile local \
   --readsdir /path/to/fastqs \
-  --outdir /path/to/output
+  --outdir   /path/to/results \
+  --human_genome  /path/to/kneaddata/hg38 \
+  --metaphlan_db  /path/to/metaphlan_db \
+  --humann_db     /path/to/humann_db
 ```
 
-For **single-end** data, add `--paired_end false --filepattern "*.fastq.gz"`.
+> **Note:** MetaPhlAn requires ≥ 15 GB RAM. A 16 GB laptop is often insufficient.
+> Prefer HPC or cloud for production runs.
 
-**Quick demo run** using the included single-end test sample (`test/single_end_rawfastq/HD32R1_subsample.fastq.gz`):
+---
+
+## Quick Start
+
+### Minimal MGX run (paired-end)
 
 ```sh
 nextflow run main.nf \
-  -profile harvard_rc \
-  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
-  --readsdir test/single_end_rawfastq \
-  --filepattern "*.fastq.gz" \
-  --paired_end false \
-  --outdir test/results
+  --workflow     mgx \
+  --readsdir     /path/to/fastqs \
+  --outdir       results \
+  --human_genome /path/to/kneaddata/hg38 \
+  --metaphlan_db /path/to/metaphlan_db \
+  --humann_db    /path/to/humann_db
 ```
 
-To also run baqlava viral profiling on the demo sample (which has 0 prescreen species, so bypass depletion is needed):
+### Single-end reads
 
 ```sh
-nextflow run main.nf \
-  -profile harvard_rc \
-  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
-  --readsdir test/single_end_rawfastq \
-  --filepattern "*.fastq.gz" \
+nextflow run main.nf --workflow mgx \
   --paired_end false \
-  --outdir test/results \
-  --run_baqlava true \
+  --filepattern "*.fastq.gz" \
+  --readsdir /path/to/fastqs \
+  [other required params]
+```
+
+### Resume an interrupted run
+
+```sh
+nextflow run main.nf [same params as original run] -resume
+```
+
+### Using a params file (recommended for reproducibility)
+
+```sh
+# Copy template and fill in your paths
+cp template-params.yaml my-params.yaml
+# Edit my-params.yaml ...
+
+nextflow run main.nf -params-file my-params.yaml
+```
+
+---
+
+## Use Cases
+
+### 1. Standard MGX: taxonomy + function only
+
+Default settings. Both MetaPhlAn and HUMAnN run; regroup/rename/merge are on.
+
+```sh
+nextflow run main.nf -profile harvard_rc \
+  --readsdir /path/to/fastqs \
+  --outdir   results
+```
+
+---
+
+### 2. Taxonomy only (skip HUMAnN)
+
+Useful when you only need MetaPhlAn profiles and want faster turnaround.
+
+```sh
+nextflow run main.nf -profile harvard_rc \
+  --readsdir /path/to/fastqs \
+  --outdir   results \
+  --run_functional_profiling false
+```
+
+---
+
+### 3. Add viral profiling (BAQLaVa)
+
+```sh
+nextflow run main.nf -profile harvard_rc \
+  --readsdir /path/to/fastqs \
+  --outdir   results \
+  --run_viral_profiling true
+```
+
+For test/tiny samples with 0 detected prescreen species (bypasses bacterial depletion):
+
+```sh
+  --run_viral_profiling true \
   --baqlava_bypass_depletion true
 ```
 
-To **resume** an interrupted run (Nextflow caches completed steps):
+---
+
+### 4. Add strain-level profiling (StrainPhlAn)
+
+StrainPhlAn runs after MetaPhlAn and uses the compressed SAM output.
+By default it profiles all detected clades.
 
 ```sh
 nextflow run main.nf -profile harvard_rc \
-  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
-  --readsdir /path/to/fastqs --outdir /path/to/output \
-  -resume
+  --readsdir /path/to/fastqs \
+  --outdir   results \
+  --run_strain_profiling true
 ```
 
-#### Changing resources (memory, CPUs, time)
+Target specific clades only:
 
-Per-tool resource defaults live in the `harvard_rc` block of `nextflow.config`.
-Find the relevant `withName` block and edit the values:
-
-```groovy
-// nextflow.config — harvard_rc profile
-withName: humann {
-    memory = '64.G'   // default: 32.G
-    cpus   = 16       // default: 8
-    time   = '24.h'   // default: 12.h
-}
+```sh
+  --run_strain_profiling true \
+  --strainphlan_clades "s__Akkermansia_muciniphila,s__Bacteroides_fragilis"
 ```
 
-You can also override any resource on the command line without editing `nextflow.config`:
+---
+
+### 5. Full MGX with all optional modules
 
 ```sh
 nextflow run main.nf -profile harvard_rc \
-  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
-  --readsdir /path/to/fastqs --outdir /path/to/output \
-  --max_memory 64.GB --max_cpus 16
+  --readsdir /path/to/fastqs \
+  --outdir   results \
+  --run_viral_profiling  true \
+  --run_strain_profiling true
 ```
 
-#### Changing databases
+---
 
-Every database path and version is controlled by a named parameter.
-All defaults live in `/n/huttenhower_lab/tools/nextflow/harvard_rc.yaml` and can be overridden on the command line with `--<param_name> <value>` without editing any file.
+### 6. SGB pipeline (MAG assembly → binning → SGB clustering)
 
-| Parameter | Tool | What it controls | Default on Harvard FASRC |
-|---|---|---|---|
-| `--human_genome` | KneadData | Host-decontamination reference directory | `/n/huttenhower_lab/data/kneaddata_databases/hg38` |
-| `--metaphlan_db` | MetaPhlAn | Directory containing the MetaPhlAn bowtie2 index + pkl | `/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
-| `--metaphlan_index` | MetaPhlAn | Database index name (must exist inside `metaphlan_db`) | `mpa_vJun23_CHOCOPhlAnSGB_202307` |
-| `--metaphlan_version` | MetaPhlAn | CLI flag style: `metaphlan_v4` (uses `--db_dir`/`--mapout`) or `metaphlan_v3` (uses `--bowtie2db`/`--bowtie2out`). **Harvard FASRC:** hutlab MetaPhlAn builds (4.0.6 and 4.1.1) use v3-style flags, so use `metaphlan_v3` here. | `metaphlan_v3` (Harvard RC) |
-| `--humann_db` | HUMAnN | Parent directory; pipeline appends `/chocophlan`, `/uniref`, `/utility_mapping` | `/n/huttenhower_lab/tools/nextflow/databases/humann3` |
-| `--humann_version` | HUMAnN | Output file naming: `humann_v37` (HUMAnN 3.x) or `humann_v4a` (HUMAnN 4) | `humann_v37` |
-
-**Examples:**
+Requires MEGAHIT, MetaBAT2, CheckM2, PhyloPhlAn, Mash, and the PhyloPhlAn database.
 
 ```sh
-# Switch to mouse kneaddata reference
 nextflow run main.nf -profile harvard_rc \
-  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
-  --human_genome /n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
-  --readsdir /path/to/fastqs --outdir /path/to/output
+  --workflow      sgb_pipeline \
+  --readsdir      /path/to/kneaddata_output \
+  --outdir        results \
+  --run_qc        false \
+  --phylophlan_path /path/to/phylophlan_databases
+```
 
-# Switch to ribosomal RNA decontamination
-nextflow run main.nf -profile harvard_rc \
-  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
-  --human_genome /n/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2 \
-  --readsdir /path/to/fastqs --outdir /path/to/output
+Lower quality thresholds for more permissive binning:
 
-# Use HUMAnN4 databases (also update beforeScript in nextflow.config to load rocky8/humann4/4.0-alpha-1)
+```sh
+  --sgb_completeness  30 \
+  --sgb_contamination 15
+```
+
+Cross-dataset abundance (align reads against all MAGs in the cohort):
+
+```sh
+  --sgb_abundance_type by_dataset
+```
+
+---
+
+### 7. Skip QC (start from already-cleaned reads)
+
+```sh
 nextflow run main.nf -profile harvard_rc \
-  -params-file /n/huttenhower_lab/tools/nextflow/harvard_rc.yaml \
+  --readsdir /path/to/kneaddata_output \
+  --outdir   results \
+  --run_qc   false
+```
+
+---
+
+### 8. HUMAnN v4 (alpha)
+
+Switch both the software module and the database:
+
+```sh
+nextflow run main.nf -profile harvard_rc \
   --humann_version humann_v4a \
   --humann_db /n/huttenhower_lab/tools/nextflow/databases/humann4 \
-  --readsdir /path/to/fastqs --outdir /path/to/output
+  --readsdir /path/to/fastqs \
+  --outdir   results
 ```
 
-#### Available databases on Harvard FASRC
+> Also update `beforeScript` in `conf/profiles/harvard_rc.config` to load
+> `rocky8/humann4/4.0-alpha-1` for the `humann` process.
+
+---
+
+### 9. Mouse / ribosomal RNA decontamination
+
+Change only the KneadData reference; everything else stays the same.
+
+```sh
+# Mouse C57BL reference
+nextflow run main.nf -profile harvard_rc \
+  --human_genome /n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
+  --readsdir /path/to/fastqs --outdir results
+
+# Ribosomal RNA (for rRNA depletion check)
+nextflow run main.nf -profile harvard_rc \
+  --human_genome /n/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2 \
+  --readsdir /path/to/fastqs --outdir results
+```
+
+---
+
+### 10. Demo run (bundled test sample)
+
+```sh
+# Harvard FASRC — single-end demo
+nextflow run main.nf -profile harvard_rc \
+  --readsdir    test/single_end_rawfastq \
+  --filepattern "*.fastq.gz" \
+  --paired_end  false \
+  --outdir      test/results
+
+# Same demo + viral profiling
+nextflow run main.nf -profile harvard_rc \
+  --readsdir    test/single_end_rawfastq \
+  --filepattern "*.fastq.gz" \
+  --paired_end  false \
+  --outdir      test/results \
+  --run_viral_profiling true \
+  --baqlava_bypass_depletion true
+```
+
+---
+
+## All Parameters
+
+### Workflow & I/O
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--workflow` | `mgx` | Workflow: `mgx \| mtx \| mgx_mtx \| 16s \| vis \| stats \| sgb_pipeline` |
+| `--readsdir` | *required* | Directory containing input FASTQ files |
+| `--outdir` | `results` | Output directory |
+| `--paired_end` | `true` | `true` for paired-end, `false` for single-end |
+| `--filepattern` | `*_R{1,2}*.fastq.gz` | Glob to match reads. Paired-end must use `{1,2}`. |
+
+### Tool toggles
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--run_qc` | `true` | Run KneadData QC. Set `false` to start from cleaned reads. |
+| `--run_taxonomic_profiling` | `true` | Run MetaPhlAn |
+| `--run_functional_profiling` | `true` | Run HUMAnN |
+| `--run_viral_profiling` | `false` | Run BAQLaVa viral profiling |
+| `--run_baqlava` | `false` | Alias for `--run_viral_profiling` (backward compat) |
+| `--run_strain_profiling` | `false` | Run StrainPhlAn SGB mode |
+
+### QC options (KneadData)
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--human_genome` | *required* | KneadData Bowtie2 reference directory (hg38, mouse, rRNA, etc.) |
+| `--kneaddata_bypass_trim` | `false` | Skip Trimmomatic trimming step |
+| `--kneaddata_remove_intermediate_files` | `true` | Delete intermediate files to save disk |
+
+### Taxonomic profiling options (MetaPhlAn)
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--metaphlan_db` | *required* | Directory containing MetaPhlAn bowtie2 index + pkl |
+| `--metaphlan_index` | `mpa_vJun23_CHOCOPhlAnSGB_202307` | Database index name (must exist inside `metaphlan_db`) |
+| `--metaphlan_version` | `metaphlan_v4` | CLI flag style: `metaphlan_v3` (uses `--bowtie2db`) or `metaphlan_v4` (uses `--db_dir`). **Harvard FASRC hutlab builds use `metaphlan_v3`.** |
+| `--metaphlan_analysis_type` | `rel_ab_w_read_stats` | `-t` flag: `rel_ab \| rel_ab_w_read_stats \| marker_ab_table` |
+| `--metaphlan_read_min_len` | `70` | Minimum read alignment length |
+
+### Functional profiling options (HUMAnN)
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--humann_db` | *required* | Parent directory; pipeline appends `/chocophlan`, `/uniref`, `/utility_mapping` |
+| `--humann_version` | `humann_v37` | Output naming: `humann_v37` or `humann_v4a` |
+| `--humann_bypass_prescreen` | `false` | Skip MetaPhlAn-based taxonomic prescreen |
+| `--humann_bypass_nucleotide_search` | `false` | Skip nucleotide (ChocoPhlAn) search |
+| `--run_humann_regroup` | `true` | Regroup gene families (`humann_regroup_table`) |
+| `--humann_regroup_grouping` | `uniref90_rxn` | Target grouping: `uniref90_rxn \| uniref90_ko \| uniref90_eggnog \| uniref90_pfam` |
+| `--run_humann_rename` | `true` | Add human-readable names (`humann_rename_table`) |
+| `--run_humann_merge` | `true` | Merge per-sample tables into one matrix (`humann_join_tables`) |
+
+### Viral profiling options (BAQLaVa)
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--run_viral_profiling` | `false` | Enable BAQLaVa |
+| `--baqlava_bypass_depletion` | `false` | Bypass bacterial depletion step (needed for test samples with 0 prescreen species) |
+| `--baqlava_db` | `null` | Custom BAQLaVa database path; uses bundled db when `null` |
+
+### Strain profiling options (StrainPhlAn)
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--run_strain_profiling` | `false` | Enable StrainPhlAn |
+| `--strainphlan_clades` | `null` | Comma-separated clade list (e.g. `s__Akkermansia_muciniphila`). `null` = all detected. |
+| `--strainphlan_phylophlan_mode` | `accurate` | Phylogenetic reconstruction: `accurate \| fast` |
+| `--strainphlan_marker_in_n_samples` | `2` | Minimum samples a marker must be present in |
+| `--strainphlan_db` | `null` | StrainPhlAn reference db; auto-resolved from `metaphlan_db` when `null` |
+
+### SGB pipeline options
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--phylophlan_path` | `null` | **Required for `sgb_pipeline`**. Path to PhyloPhlAn database directory. |
+| `--megahit_min_contig_length` | `2500` | Minimum contig length for MEGAHIT and MetaBAT2 `-m` |
+| `--megahit_options` | `''` | Extra MEGAHIT flags as a quoted string |
+| `--metabat_options` | `''` | Extra MetaBAT2 flags |
+| `--checkm_predict_options` | `''` | Extra `checkm2 predict` flags |
+| `--checkm_coverage_options` | `''` | Extra `checkm coverage` flags |
+| `--phylophlan_metagenomic_options` | `''` | Extra `phylophlan_metagenomic` flags |
+| `--mash_sketch_options` | `''` | Extra `mash sketch` flags |
+| `--sgb_completeness` | `50` | Minimum MAG completeness % for SGB inclusion |
+| `--sgb_contamination` | `10` | Maximum MAG contamination % for SGB inclusion |
+| `--sgb_abundance_type` | `by_sample` | Abundance estimation: `by_sample \| by_dataset` |
+| `--sgb_gc_length_stats` | `false` | Calculate GC content and length statistics per bin |
+
+### Resources & logging
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--max_memory` | `128.GB` | Global memory cap (used by `check_max()` in `conf/base.config`) |
+| `--max_cpus` | `32` | Global CPU cap |
+| `--max_time` | `240.h` | Global walltime cap |
+| `--log_versions` | `true` | Write tool and database versions to `results/pipeline_info/` |
+
+---
+
+## Compute Profiles
+
+Use `-profile <name>` to select the execution environment.
+
+| Profile | Environment | Executor | Tool delivery |
+|---|---|---|---|
+| `standard` / `local` | Laptop / workstation | local | conda / system PATH |
+| `tufts_hpc` | Tufts HPC | SLURM `batch` | Apptainer containers |
+| `harvard_rc` | Harvard FASRC Cannon | SLURM `hsph` | hutlab module system |
+| `amazon` | AWS | AWS Batch | ECR containers |
+| `engaging` | MIT Engaging | SLURM `newnodes` | system PATH |
+
+> The `harvard_rc` and `tufts_hpc` profiles also auto-load their respective `conf/databases/*.config`,
+> so database paths are set automatically — override them on the CLI if needed.
+
+---
+
+## Changing Databases
+
+Every database path is a named parameter. Override on the command line without editing any file:
+
+```sh
+nextflow run main.nf -profile harvard_rc \
+  --human_genome /n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
+  --readsdir /path/to/fastqs --outdir results
+```
+
+### Available databases on Harvard FASRC
 
 | Tool | Reference | Path |
 |---|---|---|
 | KneadData | Human hg38 | `/n/huttenhower_lab/data/kneaddata_databases/hg38` |
 | KneadData | Mouse C57BL | `/n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL` |
 | KneadData | Ribosomal RNA | `/n/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2` |
-| MetaPhlAn | `mpa_vJun23_CHOCOPhlAnSGB_202307` (default) | `/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
+| MetaPhlAn | `mpa_vJun23_CHOCOPhlAnSGB_202307` *(default)* | `/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
 | MetaPhlAn | `mpa_vOct22_CHOCOPhlAnSGB_202403` | `/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.0.6_vOct_fixed/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
 | HUMAnN 3.9 | ChocoPhlAn + UniRef90 | `/n/huttenhower_lab/tools/nextflow/databases/humann3` |
 | HUMAnN 4 | nucleotide + protein | `/n/huttenhower_lab/tools/nextflow/databases/humann4` |
 
-### Running on AWS
+### Downloading databases
 
-The AWS setup is too complicated to describe here for the moment,
-but requires setting up and correctly configuring:
-
-- Amazon machine images (AMIs) with the correct software installed and resources available
-  - note that often the IOPS (I/O operations per second) can be overwhelmed if multiple
-    jobs are run on the same image and all try to pull containers at the same time
-- Job queues that define which AMI should be used for different jobs
-- machine users with the correct permissions
-- S3 buckets with correct permissions
-- Containers with the correct versions of different software uploaded to ECR or docker-hub
-
-
+**KneadData:**
 ```sh
-nextflow main.nf -profile amazon -params-file params.yaml`
+kneaddata_database --download human_genome bowtie2 /path/to/kneaddata_databases
 ```
 
-## Databases
-
-Several databases must be installed to run this pipeline. 
-
-### Kneaddata
-
-- A database containing a reference human genome so that unwanted human DNA can be removed from our metagenomic samples.
-    - The `Homo_sapiens_hg39_T2T_Bowtie2_v0.1` bowtie2 database
-      can be downloaded from [here](https://huttenhower.sph.harvard.edu/kneadData_databases/Homo_sapiens_hg39_T2T_Bowtie2_v0.1.tar.gz).
-        - This version of the database can be used for all analyses
-          and there shouldn't be a big need to upgrade the database (unless we have an updated human genome!)
-- Other reference databases can be added as well if other types
-  of data want to be removed (eg. human transcriptome, mouse genome, etc.)
-
-### MetaPhlAn
-
-- `mpa_vOct22_CHOCOPhlAnSGB_202403` is the most recent MetaPhlAn
-  database that is compatible with HUMAnN v4.
-    - It can be found/downloaded manually from [here](http://cmprod1.cibio.unitn.it/biobakery4/metaphlan_databases/).
-      The easiest way to download is by running `metaphlan --install #any_other_args`
-    - Note: there is a more up-to-date version (released in January 2025)
-      that we will probably eventually want to shift to once HUMAnN is able to support it.
-- `mpa_vOct22_CHOCOPhlAnSGB_202212` should be used if running HUMAnN v3.
-
-#### A couple of pain points/things to know when downloading the Metaphlan databases:
-
-- You cannot download multiple metaphlan databases to the same directory
-- Downloading the bowtie2 database may take a bit of time (~30-60 minutes). If anything disrupts the download, remove the partially-downloaded file and try again. Any partially downloaded files will confuse metaphlan.
-- MD5 files must be downloaded along with the bowtie databases in a single download. They should not be downloaded separately from the bowtie databases (which you may be tempted to do if your connection fails after downloading the bowtie databases), as the MD5 checksum must match the bowtie database checksum. 
-- Due to these issues, it is recommended to run the pipeline on the Tufts HPC (where database files have already been downloaded), rather than trying to re-download them locally.
-
-### HUMAnN
-
-- Use the command `humann_databases --download` to download the database that you desire 
-    - for example: `humann_databases --download chocophlan full ~/biobakery_databases/chocophlan`
-    - Each humann software version has its own matching database. As long as you are using the correct software version to run `humann_database --download`, you will get a compatible database. 
-- All humann database can be found [here](http://cmprod1.cibio.unitn.it/databases/HUMAnN/).
-
-The `humann_databases` command should be used to interact with and download
-the databases used by the software.
-Minimally there are 3 databases required:
-
-- `nucleotide` - this defines the link between ChocoPhlAn marker genes database
-  and genomes of taxa that `humann` will first attempt to align to
-- `protein` - this is a DIAMOND (by default) database to align protein sequences
-  if the nucleotide-based search does not find a hit
-- `utility_mapping` - This defines things like mappings between UniRef90 and other annotations (KO, EC, etc),
-  human-readable names for database accessions, etc.
-
-The available databases can be seen with using the following command:
-
+**MetaPhlAn** (do not put multiple indexes in the same directory):
 ```sh
-humann_databases --available
+metaphlan --install --index mpa_vJun23_CHOCOPhlAnSGB_202307 \
+  --bowtie2db /path/to/metaphlan_databases
 ```
 
-To download a specific database,
-use `humann_databases --download` and include the database and the particular build, as well as the download location
-For example:
-
+**HUMAnN:**
 ```sh
-humann_databases --download chocophlan full /some/path/to/databases
+humann_databases --download chocophlan full      /path/to/humann_db/chocophlan
+humann_databases --download uniref uniref90_diamond /path/to/humann_db/uniref
+humann_databases --download utility_mapping full /path/to/humann_db/utility_mapping
 ```
 
-By default, this will also update the local configuration.
-You can use `--upadate-config no` do disable this.
+---
 
-An alternate approach is to download databases manually,
-eg [http://huttenhower.sph.harvard.edu/humann_data/chocophlan/full_chocophlan.v201901_v31.tar.gz].
-To set the `humann` configuration to point to an existing download,
-you can use `humann_config`, eg:
+## Changing Resources
 
-```sh
-humann_config --update database_folders nucleotide /some/path/to/databases/chocophlan
+Per-process defaults live in `conf/base.config`. They scale with `task.attempt` (up to 2 retries).
+Override for a specific cluster in the profile config, e.g. `conf/profiles/harvard_rc.config`.
+
+**Edit a profile config** (permanent change for that cluster):
+
+```groovy
+// conf/profiles/harvard_rc.config
+withName: humann {
+    memory = '64.G'   // was 32.G
+    cpus   = 16       // was 8
+    time   = '24.h'   // was 12.h
+}
 ```
 
-The location of databases can also be set independently of the configuration
-by passing command line flags when running `humann`.
-For example `humann --nucleotide-database /some/path/to/databases/chocophlan ...`
-
-## Information on software versions
-
-This pipeline supports the following versions of MetaPhlAn and HUMAnN:
- 
- ### MetaPhlAn
-
-- MetaPhlAn v3.1.0
-- MetaPhlAn v4
-
-### HUMAnN
-
-- HUMAnN v3.7
-- HUMAnN v4 alpha
-
-## Testing the pipeline
-
-Test fastq files are in `test/`:
-
-| Directory | Contents | Use for |
-|---|---|---|
-| `test/rawfastq/` | Paired-end samples | Paired-end pipeline test |
-| `test/single_end_rawfastq/` | `FG00004_S26_R1.fastq.gz`, `HD32R1_subsample.fastq.gz` | Single-end pipeline test; `HD32R1_subsample` is a small demo sample from the [bioBakery tutorial](https://github.com/biobakery/biobakery_workflows/tree/master/examples/tutorial/input) |
-
-To run a quick end-to-end test locally (standard profile):
+**One-off override on the command line** (without editing files):
 
 ```sh
+nextflow run main.nf -profile harvard_rc \
+  --max_memory 64.GB --max_cpus 16 \
+  --readsdir /path/to/fastqs --outdir results
+```
+
+> `--max_memory` / `--max_cpus` / `--max_time` set global caps applied by `check_max()` in `conf/base.config`.
+> They don't set per-process values, but they cap any automatic scaling.
+
+---
+
+## Output Structure
+
+```
+results/
+├── pipeline_info/
+│   ├── versions.txt                               # Tool versions (kneaddata, metaphlan, humann, ...)
+│   ├── db_paths.txt                               # Database paths used in this run
+│   ├── execution_timeline_YYYY-MM-DD_HH-mm-ss.html
+│   ├── execution_report_YYYY-MM-DD_HH-mm-ss.html
+│   ├── execution_trace_YYYY-MM-DD_HH-mm-ss.txt
+│   └── pipeline_dag_YYYY-MM-DD_HH-mm-ss.svg
+│
+├── kneaddata/                                     # (run_qc=true)
+│   ├── ${SAMPLE}_kneaddata.log
+│   ├── ${SAMPLE}_kneaddata_paired_1.fastq.gz      # (paired-end only)
+│   ├── ${SAMPLE}_kneaddata_paired_2.fastq.gz
+│   ├── ${SAMPLE}_kneaddata_unmatched_1.fastq.gz
+│   └── ${SAMPLE}_kneaddata_unmatched_2.fastq.gz
+│
+├── metaphlan/                                     # (run_taxonomic_profiling=true)
+│   ├── ${INDEX}/
+│   │   ├── ${SAMPLE}_profile_${INDEX}.tsv         # species relative abundances
+│   │   └── ${SAMPLE}_bowtie2_${INDEX}.tsv         # bowtie2 alignment stats
+│   ├── bzip/
+│   │   └── ${SAMPLE}_${INDEX}.sam.bz2             # compressed SAM (used by StrainPhlAn)
+│   └── merged_metaphlan_profiles.tsv              # all samples merged
+│
+├── humann/                                        # (run_functional_profiling=true)
+│   └── ${H_VERSION}/
+│       ├── ${SAMPLE}_genefamilies_${H_VERSION}.tsv
+│       ├── ${SAMPLE}_pathabundance_${H_VERSION}.tsv
+│       ├── ${SAMPLE}_pathcoverage_${H_VERSION}.tsv   # (humann_v37 only)
+│       ├── regroup/                               # (run_humann_regroup=true)
+│       │   └── ${SAMPLE}_${GROUPING}_${H_VERSION}.tsv
+│       ├── rename/                                # (run_humann_rename=true)
+│       │   └── ${SAMPLE}_${GROUPING}_named_${H_VERSION}.tsv
+│       └── merged/                               # (run_humann_merge=true)
+│           ├── merged_genefamilies_${H_VERSION}.tsv
+│           ├── merged_pathabundance_${H_VERSION}.tsv
+│           └── merged_pathcoverage_${H_VERSION}.tsv
+│
+├── baqlava/                                       # (run_viral_profiling=true)
+│   └── ${SAMPLE}_baqlava/
+│
+├── strainphlan/                                   # (run_strain_profiling=true)
+│   ├── markers/
+│   │   └── ${SAMPLE}.pkl
+│   └── ${CLADE}/
+│       └── output/
+│           ├── *.tre                              # phylogenetic tree
+│           └── *.tsv                             # marker table
+│
+└── [sgb_pipeline workflow outputs]
+    ├── assembly/main/${SAMPLE}/${SAMPLE}.final.contigs.fa
+    ├── assembly/contig_depths/${SAMPLE}.contig_depths.txt
+    ├── bins/${SAMPLE}/bins/*.bin.*.fa
+    ├── checkm/
+    │   ├── ${SAMPLE}/quality_report.tsv
+    │   ├── merged_quality_report.tsv
+    │   ├── n50/mags_n50.tsv
+    │   └── qa/checkm_qa_and_n50.tsv
+    ├── phylophlan/
+    │   ├── phylophlan_out.tsv
+    │   └── phylophlan_relab.tsv
+    ├── sgbs/
+    │   ├── mash/mash_dist_out.tsv
+    │   └── sgbs/SGB_info.tsv
+    └── final_profile.tsv                          # merged SGB abundance profile
+```
+
+---
+
+## Testing
+
+Test FASTQ files live in `test/`:
+
+| Directory | Contents |
+|---|---|
+| `test/rawfastq/` | Two paired-end samples |
+| `test/single_end_rawfastq/` | `HD32R1_subsample.fastq.gz` — [bioBakery tutorial](https://github.com/biobakery/biobakery_workflows/tree/master/examples/tutorial/input) demo sample |
+
+Run with [nf-test](https://www.nf-test.com/):
+
+```sh
+# From HPC
+nf-test test tests/main.nf.test         --profile tufts_hpc
+nf-test test tests/validate_output.nf.test --profile tufts_hpc
+
+# Locally (requires databases)
 nextflow run main.nf -profile standard -params-file template-params.yaml
 ```
 
-See the **Harvard HSPH / FASRC** section above for a cluster test run using `HD32R1_subsample.fastq.gz`.
+CI runs automatically on every push via `.github/workflows/ci-tests.yml`.
 
-## Using the `template-params.yaml` file
+---
 
-The `template-params.yaml` file defines all input parameters that you may want to use to run the Nextflow pipeline. The file should **not** be used directly to run the pipeline. Rather, the user should select the params they need from the file based on how they would like to use the pipeline (software versions of MetaPhlAn or HUMAnN, computing environment, databases, input data etc. ), and paste these into a separate yaml file. This second yaml file can be used to run the Nextflow pipeline. 
+## Project Structure
 
-### Overview of parameters in `template-params.yaml`
-
-- `paired_end`: True or False, given the type of input data
-- `filepattern`: regex describing sample naming convention (relative to the input data type)
-    - If there are paired-end reads, make sure the pattern considers both R1 and R2 the same sample.
-- `metaphlan_version`: MetaPhlAn software version (either `metaphlan_v3` or `metaphlan_v4`)
-- `humann_version`: HUMAnN3 software version (either `humann_v37` or `humann_v4a`)
-- `readsdir`: path to directory that contains raw data 
-- `outdir`: path to directory where processed results will be saved
-- `human_genome`: path to directory that contains human reference database used during Kneaddata 
-- `trimmomatic_path`: path to directory that contains Trimmomatic download
-- `metaphlan_db`: path to directory that contains metaphlan databases
-- `metaphlan_index`: database version (database must exist within `metaphlan_db`)
-- `humann_db`: path to directory containing humann databases
-
-## Pipeline outputs
-
-> [!NOTE] Aspirational
-> Not all of this section may be reflected in the current pipeline
-
-The general structure of outputs is
-
-- `${UID}` is the unique sequence identifier, eg `SEQ99999_S1`
-- `${DB}` is a chocophlan database, eg `mpa_vOct22_CHOCOPhlAnSGB_202403`
-- `${H_VERSION}` is a `humann` version,
-  eg `v4a` or `v37`
-
-```txt
-./raw_data_root_folder/
-├── rawfastq/
-    ├── ${UID}_l001_r1_0001.fastq.gz
-    └── ${UID}_l001_r2_0001.fastq.gz
-
-./processing_root_folder/
-    ├── kneaddata/
-    │   ├── ${UID}_kneaddata.log
-    │   ├── ${UID}_kneaddata_paired_1.fastq.gz
-    │   ├── ${UID}_kneaddata_paired_2.fastq.gz
-    │   ├── ${UID}_kneaddata_unmatched_1.fastq.gz
-    │   └── ${UID}_kneaddata_unmatched_2.fastq.gz
-    ├── metaphlan
-    │   └── ${DB}
-    │       ├── ${UID}_${DB}_profile.tsv
-    │       ├── ${UID}_${DB}_bowtie2.tsv
-    │       └── ${UID}_${DB}.sam.bz2
-    └── humann
-        └── ${H_VERSION}
-            ├── ${UID}_${H_VERSION}_genefamilies.tsv
-            ├── ${UID}_${H_VERSION}_pathabundance.tsv
-            └── ${UID}_${H_VERSION}_pathcoverage.tsv
 ```
-
-> [!NOTE] Humann file formats
-> In humann v4a, the outputs are slightly different.
-> The files are structured like:
-> 
-> ```
->     └── humann
->        └── ${H_VERSION}
->            ├── ${UID}_${H_VERSION}_0.log
->            ├── ${UID}_${H_VERSION}_2_genefamilies.tsv
->            ├── ${UID}_${H_VERSION}_3_reactions.tsv
->            └── ${UID}_${H_VERSION}_4_pathabundance.tsv
-> ```
-
-### Deprecated structure
-
-- `humann` used to have 3 subfolders, `main`, `regroup`, `rename`.
-  These have been deprecated in favor of only saving primary outputs
-  in long-term storage. 
-  Regrouped and renamed files can be trivially created from primary outputs.
-
-
-  ### Testing
-
-  Test have been written using [`NF-test`](https://www.nf-test.com/) to test the end-to-end pipeline, as well as the outputs. To run the tests on the HPC cluster, you can run:
-  - `nf-test test tests/main.nf.test --profile tufts_hpc`
-  - `nf-test test tests/validate_output.nf.test --profile tufts_hpc`
-  
-  
-   CI has also been set up on Github to ensure that new changes to the pipeline are tested automatically. 
-
-
-
+biobakery-nextflow/
+├── main.nf                              # Router: --workflow mgx|sgb_pipeline|...
+├── workflows/
+│   ├── mgx.nf                           # MGX: QC → taxonomy → function (+ viral/strain optional)
+│   ├── mtx.nf                           # MTX stub
+│   ├── mgx_mtx.nf                       # MGX+MTX stub
+│   ├── sixteens.nf                      # 16S stub
+│   ├── vis.nf                           # Visualization stub
+│   └── stats.nf                         # Statistics stub
+├── subworkflows/
+│   ├── quality_control.nf               # KneadData (single + paired routing)
+│   ├── taxonomic_profiling.nf           # MetaPhlAn + bzip + merge
+│   ├── functional_profiling.nf          # HUMAnN + regroup + rename + merge
+│   ├── viral_profiling.nf               # BAQLaVa
+│   ├── strain_profiling.nf              # StrainPhlAn (SGB mode)
+│   └── SGB_pipeline.nf                  # Full MAG assembly → SGB pipeline
+├── modules/
+│   ├── kneaddata/main.nf
+│   ├── metaphlan/main.nf                # metaphlan + metaphlan_bzip + metaphlan_merge
+│   ├── humann/main.nf
+│   ├── strainphlan/main.nf              # sample2markers + strainphlan
+│   ├── viral/baqlava/main.nf
+│   ├── sgb_pipeline/megahit/main.nf     # MEGAHIT assembly
+│   ├── binning/metabat2/main.nf
+│   ├── qc/checkm2/main.nf               # checkm2 + merge + n50 + wrangling
+│   ├── phylogenomics/phylophlan_metagenomic/main.nf
+│   └── utils/
+│       ├── align_and_depth/main.nf      # Bowtie2 + jgi_summarize_bam_contig_depths
+│       ├── humann_merge/main.nf
+│       ├── humann_regroup/main.nf
+│       ├── humann_rename/main.nf
+│       ├── mash/main.nf                 # sketch + paste + dist + sgb_cluster + merge_tax
+│       └── version_log/main.nf
+├── conf/
+│   ├── base.config                      # Default resources + check_max()
+│   ├── profiles/
+│   │   ├── harvard_rc.config            # hutlab module system + SLURM hsph
+│   │   ├── tufts_hpc.config             # Apptainer + SLURM batch
+│   │   ├── aws.config                   # AWS Batch + ECR containers
+│   │   └── local.config
+│   └── databases/
+│       ├── harvard_rc.config            # Default DB paths on Cannon
+│       └── tufts.config                 # Default DB paths on Tufts
+├── bin/
+│   ├── scripts/                         # Python helpers (from anadama2 assembly_tasks/)
+│   │   ├── checkm_wrangling.py
+│   │   ├── mag_n50_calc.py
+│   │   ├── mash_list_inputs.py
+│   │   ├── phylophlan_add_tax_assignment.py
+│   │   └── ...
+│   └── Rscripts/
+│       ├── mash_clusters.R
+│       └── merge_tax_and_abundance.R
+├── assets/
+│   ├── diagrams/                        # draw.io source files
+│   └── templates/                       # Quarto report templates (planned)
+└── test/                                # Test FASTQ files + expected outputs
+```
