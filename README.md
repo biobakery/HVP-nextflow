@@ -13,21 +13,20 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Workflow Architecture](#workflow-architecture)
-3. [Tools & Versions](#tools--versions)
-4. [Installation & Environment Setup](#installation--environment-setup)
+2. [Tools & Versions](#tools--versions)
+3. [Installation & Environment Setup](#installation--environment-setup)
    - [Harvard FASRC (Cannon)](#harvard-fasrc-cannon)
    - [Tufts HPC](#tufts-hpc)
    - [AWS Batch](#aws-batch)
    - [Local / Docker](#local--docker)
-5. [Quick Start](#quick-start)
-6. [Use Cases](#use-cases)
-7. [All Parameters](#all-parameters)
-8. [Compute Profiles](#compute-profiles)
-9. [Changing Databases](#changing-databases)
-10. [Changing Resources](#changing-resources)
-11. [Output Structure](#output-structure)
-12. [Testing](#testing)
+4. [Quick Start](#quick-start)
+5. [Use Cases](#use-cases)
+6. [All Parameters](#all-parameters)
+7. [Compute Profiles](#compute-profiles)
+8. [Changing Databases](#changing-databases)
+9. [Changing Resources](#changing-resources)
+10. [Output Structure](#output-structure)
+11. [Testing](#testing)
 
 ---
 
@@ -44,123 +43,6 @@ Select a workflow with `--workflow`:
 | `16s` | 🔜 Stub | 16S amplicon (DADA2 / QIIME2 planned) |
 | `vis` | 🔜 Stub | Quarto report generation |
 | `stats` | 🔜 Stub | MaAsLin2 / LEfSe / diversity |
-
----
-
-## Workflow Architecture
-
-### MGX workflow
-
-```mermaid
-flowchart TD
-    A[Raw FASTQ reads] --> B{paired_end?}
-    B -->|true| C[fromFilePairs]
-    B -->|false| D[fromPath]
-    C & D --> E[QUALITY_CONTROL\nKneadData]
-    E -->|run_qc=false: bypass| F{run_taxonomic_profiling?}
-    E --> F
-    F -->|yes| G[TAXONOMIC_PROFILING\nMetaPhlAn + merge]
-    G --> H{run_functional_profiling?}
-    H -->|yes| I[FUNCTIONAL_PROFILING\nHUMAnN → regroup → rename → merge]
-    G --> J{run_viral_profiling?}
-    J -->|yes| K[VIRAL_PROFILING\nBAQLaVa]
-    G --> L{run_strain_profiling?}
-    L -->|yes| M[STRAIN_PROFILING\nStrainPhlAn SGB mode]
-    F & H & J & L --> N[version_log\npipeline_info/]
-
-    style E fill:#4a90d9,color:#fff
-    style G fill:#7ab648,color:#fff
-    style I fill:#e8a838,color:#fff
-    style K fill:#c0392b,color:#fff
-    style M fill:#8e44ad,color:#fff
-```
-
-### SGB Pipeline workflow
-
-```mermaid
-flowchart TD
-    A[Raw FASTQ reads] --> B[QUALITY_CONTROL\nKneadData]
-    B --> C[megahit\nDe novo assembly]
-    C --> D[align_and_depth\nBowtie2 + jgi_summarize]
-    D --> E[metabat2\nBin contigs into MAGs]
-    E --> F[checkm2\nMAG quality assessment]
-    E --> G[mag_n50\nN50 statistics]
-    F & G --> H[checkm2_wrangling\nFilter by completeness/contamination]
-    E --> I[phylophlan_metagenomic\nPhylogenetic placement to SGBs]
-    H & I --> J[mash_list_inputs\nSelect qualifying MAGs]
-    J --> K[mash_sketch + paste + dist\nPairwise genome distances]
-    K & H & I --> L[sgb_cluster\nCluster MAGs into SGBs]
-    L & H & I --> M[merge_tax_abundance\nFinal profile]
-
-    style B fill:#4a90d9,color:#fff
-    style C fill:#16a085,color:#fff
-    style D fill:#16a085,color:#fff
-    style E fill:#16a085,color:#fff
-    style F fill:#e67e22,color:#fff
-    style G fill:#e67e22,color:#fff
-    style I fill:#8e44ad,color:#fff
-    style L fill:#c0392b,color:#fff
-    style M fill:#27ae60,color:#fff
-```
-
-### Module / Subworkflow / Workflow layering
-
-```mermaid
-graph LR
-    subgraph Workflows["workflows/"]
-        W1[mgx.nf]
-        W2[mtx.nf]
-        W3[mgx_mtx.nf]
-        W4[sixteens.nf]
-        W5[vis.nf]
-        W6[stats.nf]
-        W7[sgb_pipeline.nf]
-    end
-    subgraph Subworkflows["subworkflows/"]
-        S1[quality_control.nf]
-        S2[taxonomic_profiling.nf]
-        S3[functional_profiling.nf]
-        S4[viral_profiling.nf]
-        S5[strain_profiling.nf]
-    end
-    subgraph Modules["modules/"]
-        M1[kneaddata/]
-        M2[metaphlan/]
-        M3[humann/]
-        M4[viral/baqlava/]
-        M5[strainphlan/]
-        M6[sgb_pipeline/megahit/]
-        M7[binning/metabat2/]
-        M8[qc/checkm2/]
-        M9[phylogenomics/phylophlan_metagenomic/]
-        M10[utils/mash/]
-        M11[utils/align_and_depth/]
-        M12[utils/humann_merge + regroup + rename]
-        M13[utils/version_log/]
-    end
-    W1 --> S1 & S2 & S3 & S4 & S5
-    W2 --> S1 & S2 & S3
-    W3 --> S1 & S2 & S3 & S4
-    W7 --> S1 & M6 & M7 & M8 & M9 & M10 & M11
-    S1 --> M1
-    S2 --> M2
-    S3 --> M3 & M12
-    S4 --> M4
-    S5 --> M5
-```
-
-### Diagram assets
-
-All draw.io source files are in [`assets/diagrams/`](assets/diagrams/). Open with [draw.io](https://app.diagrams.net/) or the VS Code draw.io extension.
-
-| File | Description |
-|---|---|
-| [`architecture_overview.drawio`](assets/diagrams/architecture_overview.drawio) | Full layered architecture: main.nf → workflows → subworkflows → modules → conf |
-| [`mgx_workflow.drawio`](assets/diagrams/mgx_workflow.drawio) | MGX pipeline flowchart with feature flag branches |
-| [`sgb_pipeline.drawio`](assets/diagrams/sgb_pipeline.drawio) | SGB MAG assembly pipeline (9-step) |
-| [`mtx_workflow.drawio`](assets/diagrams/mtx_workflow.drawio) | MTX metatranscriptome pipeline (planned) |
-| [`mgx_mtx_workflow.drawio`](assets/diagrams/mgx_mtx_workflow.drawio) | Joint MGX+MTX integration workflow (partial) |
-| [`sixteens_workflow.drawio`](assets/diagrams/sixteens_workflow.drawio) | 16S amplicon pipeline via DADA2/QIIME2 (planned) |
 
 ---
 
