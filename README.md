@@ -321,38 +321,101 @@ nextflow run main.nf -profile harvard_rc \
 
 ---
 
-### 2. Taxonomy only (skip HUMAnN)
+### 2. Taxonomy only — with MetaPhlAn options
 
-Useful when you only need MetaPhlAn profiles and want faster turnaround.
+Skip HUMAnN and tune MetaPhlAn output format, alignment length, and database:
 
 ```sh
+# Marker abundance table instead of relative abundance (default: rel_ab_w_read_stats)
 nextflow run main.nf -profile harvard_rc \
   --readsdir /path/to/fastqs \
   --outdir   results \
-  --run_functional_profiling false
+  --run_functional_profiling false \
+  --metaphlan_analysis_type marker_ab_table
+
+# Stricter minimum read alignment length (default: 70 bp)
+nextflow run main.nf -profile harvard_rc \
+  --readsdir /path/to/fastqs \
+  --outdir   results \
+  --run_functional_profiling false \
+  --metaphlan_read_min_len 100
+
+# Switch to a different MetaPhlAn database index
+nextflow run main.nf -profile harvard_rc \
+  --readsdir /path/to/fastqs \
+  --outdir   results \
+  --metaphlan_db   /path/to/other/metaphlan_databases \
+  --metaphlan_index mpa_vOct22_CHOCOPhlAnSGB_202403 \
+  --metaphlan_version metaphlan_v4
+```
+
+> On Harvard FASRC hutlab builds, pass `--metaphlan_version metaphlan_v3` — the hutlab binary uses v3-style CLI flags (`--bowtie2db`) even though it is MetaPhlAn 4.
+
+---
+
+### 3. Functional profiling — HUMAnN options
+
+Tune the regrouping target, skip internal searches, or disable post-processing:
+
+```sh
+# KEGG orthologs instead of MetaCyc reactions (default: uniref90_rxn)
+nextflow run main.nf -profile harvard_rc \
+  --readsdir /path/to/fastqs \
+  --outdir   results \
+  --humann_regroup_grouping uniref90_ko
+
+# Available groupings: uniref90_rxn | uniref90_ko | uniref90_eggnog | uniref90_pfam
+
+# Skip MetaPhlAn prescreen inside HUMAnN (useful when species profile already exists)
+nextflow run main.nf -profile harvard_rc \
+  --readsdir /path/to/fastqs \
+  --outdir   results \
+  --humann_bypass_prescreen true
+
+# Skip nucleotide search — go straight to translated search (faster, lower sensitivity)
+nextflow run main.nf -profile harvard_rc \
+  --readsdir /path/to/fastqs \
+  --outdir   results \
+  --humann_bypass_nucleotide_search true
+
+# Disable post-processing (no regroup / rename / merge tables)
+nextflow run main.nf -profile harvard_rc \
+  --readsdir /path/to/fastqs \
+  --outdir   results \
+  --run_humann_regroup false \
+  --run_humann_rename  false \
+  --run_humann_merge   false
 ```
 
 ---
 
-### 3. Add viral profiling (BAQLaVa)
+### 4. Add viral profiling — BAQLaVa options
 
 ```sh
+# Standard viral profiling
 nextflow run main.nf -profile harvard_rc \
   --readsdir /path/to/fastqs \
   --outdir   results \
   --run_viral_profiling true
-```
 
-For test/tiny samples with 0 detected prescreen species (bypasses bacterial depletion):
-
-```sh
+# Bypass bacterial depletion — needed for test/tiny samples with 0 prescreen species
+nextflow run main.nf -profile harvard_rc \
+  --readsdir /path/to/fastqs \
+  --outdir   results \
   --run_viral_profiling true \
   --baqlava_bypass_depletion true
+
+# Use a custom BAQLaVa database (default: bundled db)
+nextflow run main.nf -profile harvard_rc \
+  --readsdir /path/to/fastqs \
+  --outdir   results \
+  --run_viral_profiling true \
+  --baqlava_db /path/to/custom/baqlava_db
 ```
 
 ---
 
-### 4. Add strain-level profiling (StrainPhlAn)
+### 5. Add strain-level profiling (StrainPhlAn)
 
 StrainPhlAn runs after MetaPhlAn and uses the compressed SAM output.
 By default it profiles all detected clades.
@@ -373,7 +436,7 @@ Target specific clades only:
 
 ---
 
-### 5. Full MGX with all optional modules
+### 6. Full MGX with all optional modules
 
 ```sh
 nextflow run main.nf -profile harvard_rc \
@@ -385,7 +448,7 @@ nextflow run main.nf -profile harvard_rc \
 
 ---
 
-### 6. SGB pipeline (MAG assembly → binning → SGB clustering)
+### 7. SGB pipeline (MAG assembly → binning → SGB clustering)
 
 Requires MEGAHIT, MetaBAT2, CheckM2, PhyloPhlAn, Mash, and the PhyloPhlAn database.
 
@@ -413,7 +476,7 @@ Cross-dataset abundance (align reads against all MAGs in the cohort):
 
 ---
 
-### 7. Skip QC (start from already-cleaned reads)
+### 8. Skip QC (start from already-cleaned reads)
 
 ```sh
 nextflow run main.nf -profile harvard_rc \
@@ -424,7 +487,7 @@ nextflow run main.nf -profile harvard_rc \
 
 ---
 
-### 8. HUMAnN v4 (alpha)
+### 9. HUMAnN v4 (alpha)
 
 Switch both the software module and the database:
 
@@ -441,7 +504,7 @@ nextflow run main.nf -profile harvard_rc \
 
 ---
 
-### 9. Mouse / ribosomal RNA decontamination
+### 10. Mouse / ribosomal RNA decontamination
 
 Change only the KneadData reference; everything else stays the same.
 
@@ -459,7 +522,7 @@ nextflow run main.nf -profile harvard_rc \
 
 ---
 
-### 10. Demo run (bundled test sample)
+### 11. Demo run (bundled test sample)
 
 ```sh
 # Harvard FASRC — single-end demo
@@ -774,6 +837,7 @@ biobakery-nextflow/
 ├── main.nf                              # Router: --workflow mgx|sgb_pipeline|...
 ├── workflows/
 │   ├── mgx.nf                           # MGX: QC → taxonomy → function (+ viral/strain optional)
+│   ├── sgb_pipeline.nf                  # MAG assembly → binning → SGB clustering
 │   ├── mtx.nf                           # MTX stub
 │   ├── mgx_mtx.nf                       # MGX+MTX stub
 │   ├── sixteens.nf                      # 16S stub
@@ -784,8 +848,7 @@ biobakery-nextflow/
 │   ├── taxonomic_profiling.nf           # MetaPhlAn + bzip + merge
 │   ├── functional_profiling.nf          # HUMAnN + regroup + rename + merge
 │   ├── viral_profiling.nf               # BAQLaVa
-│   ├── strain_profiling.nf              # StrainPhlAn (SGB mode)
-│   └── SGB_pipeline.nf                  # Full MAG assembly → SGB pipeline
+│   └── strain_profiling.nf              # StrainPhlAn (SGB mode)
 ├── modules/
 │   ├── kneaddata/main.nf
 │   ├── metaphlan/main.nf                # metaphlan + metaphlan_bzip + metaphlan_merge

@@ -31,21 +31,6 @@
 | Demo test sample | `test/single_end_rawfastq/HD32R1_subsample.fastq.gz` |
 | CI tests (nf-test) | `tests/main.nf.test`, `tests/validate_output.nf.test` |
 
-### Remaining
-
-| Priority | Feature | Notes |
-|---|---|---|
-| P1 | **MTX workflow** | `workflows/mtx.nf` stub — needs rRNA depletion KneadData + HUMAnN transcript mode |
-| P1 | **MGX+MTX joint workflow** | `workflows/mgx_mtx.nf` stub — MGX arm runs; RNA/DNA ratio integration pending |
-| P2 | **16S workflow** | `workflows/sixteens.nf` stub — DADA2 / QIIME2 path planned |
-| P2 | **Visualization workflow** | `workflows/vis.nf` stub — Quarto report generation |
-| P2 | **Sample samplesheet input** | CSV manifest instead of file glob |
-| P2 | **Expanded viral profiling** | geNomad, Hecatomb, Phanta, Cenote-Taker 3 (see §5) |
-| P3 | **Stats workflow** | `workflows/stats.nf` stub — MaAsLin2 / LEfSe / diversity |
-| P3 | **Dynamic resource allocation** | File-size-based `time`/`memory` closures |
-| P3 | **Input schema validation** | nf-validation JSON schema per workflow |
-| P3 | **Harvard RC SGB modules** | hutlab modules for MEGAHIT, MetaBAT2, CheckM2, PhyloPhlAn, Mash |
-
 ---
 
 ## 2. Project Structure
@@ -145,6 +130,8 @@ biobakery-nextflow/
     └── baqlava.nf
 ```
 
+![Architecture overview](../assets/diagrams/architecture_overview.drawio.png)
+
 ---
 
 ## 3. Anadama2 → Nextflow Feature Mapping
@@ -202,6 +189,8 @@ biobakery-nextflow/
 
 ## 4. Workflow Step Toggles
 
+![MGX workflow](../assets/diagrams/mgx_workflow.drawio.png)
+
 Every major step is individually togglable via params. All default to `true` for the MGX workflow except strain/viral profiling which are opt-in.
 
 ```yaml
@@ -226,33 +215,107 @@ run_strain_profiling:     false   # StrainPhlAn SGB mode (opt-in)
 
 > When `run_qc: false`, input reads are treated as already host-depleted. For paired-end pre-cleaned reads not produced by KneadData, use `--paired_end false` and provide concatenated reads.
 
-### Command-line examples
+### On/off toggle examples
 
 ```bash
-# QC only
-nextflow run main.nf -profile harvard_rc \
-  --workflow mgx \
+# QC only (skip taxonomy + function)
+nextflow run main.nf -profile harvard_rc --workflow mgx \
   --readsdir /path/to/fastqs --outdir /path/to/output \
   --run_taxonomic_profiling false --run_functional_profiling false
 
 # QC + MetaPhlAn only (skip HUMAnN)
-nextflow run main.nf -profile harvard_rc \
-  --workflow mgx \
+nextflow run main.nf -profile harvard_rc --workflow mgx \
   --readsdir /path/to/fastqs --outdir /path/to/output \
   --run_functional_profiling false
 
-# MetaPhlAn + HUMAnN on pre-cleaned reads (skip KneadData)
-nextflow run main.nf -profile harvard_rc \
-  --workflow mgx \
+# Taxonomy + function on pre-cleaned reads (skip KneadData)
+nextflow run main.nf -profile harvard_rc --workflow mgx \
   --readsdir /path/to/clean_fastqs --outdir /path/to/output \
   --run_qc false
 
-# Full pipeline + BAQLaVa viral profiling + StrainPhlAn
-nextflow run main.nf -profile harvard_rc \
-  --workflow mgx \
+# Full pipeline with all optional modules
+nextflow run main.nf -profile harvard_rc --workflow mgx \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  --run_viral_profiling true --run_strain_profiling true
+```
+
+### Taxonomic profiling options (MetaPhlAn)
+
+```bash
+# Marker abundance table instead of relative abundance
+nextflow run main.nf -profile harvard_rc --workflow mgx \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  --metaphlan_analysis_type marker_ab_table
+
+# Stricter minimum read alignment length (default: 70)
+nextflow run main.nf -profile harvard_rc --workflow mgx \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  --metaphlan_read_min_len 100
+
+# Use v3-style CLI flags (required for Harvard FASRC hutlab builds)
+nextflow run main.nf -profile harvard_rc --workflow mgx \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  --metaphlan_version metaphlan_v3
+
+# Use a different database index (must match the installed HUMAnN database)
+nextflow run main.nf -profile harvard_rc --workflow mgx \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  --metaphlan_db /path/to/other/metaphlan_databases \
+  --metaphlan_index mpa_vOct22_CHOCOPhlAnSGB_202403 \
+  --metaphlan_version metaphlan_v4
+```
+
+### Functional profiling options (HUMAnN)
+
+```bash
+# KEGG orthologs instead of MetaCyc reactions (default: uniref90_rxn)
+nextflow run main.nf -profile harvard_rc --workflow mgx \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  --humann_regroup_grouping uniref90_ko
+
+# Skip MetaPhlAn prescreen inside HUMAnN (use when you already have the species profile)
+nextflow run main.nf -profile harvard_rc --workflow mgx \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  --humann_bypass_prescreen true
+
+# Skip nucleotide search — go straight to translated search (faster, less sensitive)
+nextflow run main.nf -profile harvard_rc --workflow mgx \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  --humann_bypass_nucleotide_search true
+
+# Disable post-processing (no regroup / rename / merge)
+nextflow run main.nf -profile harvard_rc --workflow mgx \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  --run_humann_regroup false \
+  --run_humann_rename  false \
+  --run_humann_merge   false
+
+# HUMAnN v4 (alpha) — also requires swapping the database and module (see §5)
+nextflow run main.nf -profile harvard_rc --workflow mgx \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  --humann_version humann_v4a \
+  --humann_db /n/huttenhower_lab/tools/nextflow/databases/humann4
+```
+
+### Viral profiling options (BAQLaVa)
+
+```bash
+# Standard viral profiling
+nextflow run main.nf -profile harvard_rc --workflow mgx \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  --run_viral_profiling true
+
+# Bypass bacterial depletion (needed for test/tiny samples with 0 prescreen species)
+nextflow run main.nf -profile harvard_rc --workflow mgx \
   --readsdir /path/to/fastqs --outdir /path/to/output \
   --run_viral_profiling true \
-  --run_strain_profiling true
+  --baqlava_bypass_depletion true
+
+# Use a custom BAQLaVa database (default: bundled db)
+nextflow run main.nf -profile harvard_rc --workflow mgx \
+  --readsdir /path/to/fastqs --outdir /path/to/output \
+  --run_viral_profiling true \
+  --baqlava_db /path/to/custom/baqlava_db
 ```
 
 ---
@@ -313,33 +376,17 @@ Available `withName` blocks: `single_end_kneaddata`, `paired_end_kneaddata`, `me
 
 ---
 
-## 6. Viral Profiling — Extensible Architecture
+## 6. Viral Profiling (BAQLaVa)
 
-### Current
+BAQLaVa is implemented in `modules/viral/baqlava/main.nf` and orchestrated by `subworkflows/viral_profiling.nf`. It takes cleaned reads and the MetaPhlAn profile as input and produces a viral taxonomic profile using HUMAnN-based bacterial depletion.
 
-BAQLaVa is implemented in `modules/viral/baqlava/main.nf` and wrapped by `subworkflows/viral_profiling.nf`. Enable with `--run_viral_profiling true`.
+Enable with `--run_viral_profiling true` (or the legacy alias `--run_baqlava true`).
 
-### Planned expansion
-
-Additional tools will be added as modules under `modules/viral/` and guarded by a `--viral_tools` list param:
-
-| Tool | Input | Approach |
+| Param | Default | Description |
 |---|---|---|
-| **BAQLaVa** ✅ | Cleaned reads + MetaPhlAn profile | Read-based; HUMAnN bacterial depletion |
-| **Phanta** 🔜 | Cleaned reads | Read-based; Kraken2 + phage DB |
-| **Hecatomb** 🔜 | Cleaned reads | Assembly-free viromics; DIAMOND + MMSEQS2 |
-| **geNomad** 🔜 | Assembled contigs | Neural network classifier |
-| **Cenote-Taker 3** 🔜 | Assembled contigs | Hallmark-gene virus discovery |
-
-#### Adding a new viral tool
-
-1. Create `modules/viral/<toolname>/main.nf` — single process with `tag`, `publishDir`, `input`, `output`, `script`
-2. Add `include { TOOLNAME }` to `subworkflows/viral_profiling.nf`
-3. Add a `when:` guard or `if` block on `params.viral_tools`
-4. Add `beforeScript` to `conf/profiles/harvard_rc.config` for the hutlab module
-5. Document database paths in `conf/databases/harvard_rc.config`
-
-No changes to `main.nf` or any workflow file.
+| `--run_viral_profiling` | `false` | Enable BAQLaVa |
+| `--baqlava_bypass_depletion` | `false` | Skip bacterial depletion step (use for test/tiny samples with 0 MetaPhlAn prescreen species) |
+| `--baqlava_db` | `null` | Path to a custom BAQLaVa database; uses the bundled database when `null` |
 
 ---
 
