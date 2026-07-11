@@ -33,6 +33,7 @@ process metaphlan {
         $db_arg \\
         $out_arg \\
         --samout ${sample}_${params.metaphlan_index}.sam \\
+        --read_min_len ${params.metaphlan_read_min_len} \\
         --nproc ${task.cpus} \\
         -o ${sample}_profile_${params.metaphlan_index}.tsv
     """

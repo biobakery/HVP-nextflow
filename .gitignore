@@ -1,8 +1,11 @@
 test/output/*
+test/results/*
 .nextflow*
 work/*
+work_test*/
 output/*
 .DS_Store
+results/
 
 # run logs
 test/tutorial_run.log

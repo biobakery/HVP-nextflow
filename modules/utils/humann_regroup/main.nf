@@ -20,7 +20,6 @@ process humann_regroup {
     humann_regroup_table \\
         -i ${genefamilies} \\
         -g ${params.humann_regroup_grouping} \\
-        --custom ${params.humann_db}/utility_mapping \\
         -o ${sample}_${params.humann_regroup_grouping}_${params.humann_version}.tsv
     """
 }

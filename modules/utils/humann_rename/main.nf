@@ -20,7 +20,6 @@ process humann_rename {
     humann_rename_table \\
         -i ${regrouped} \\
         -n ${params.humann_regroup_grouping} \\
-        --custom ${params.humann_db}/utility_mapping \\
         -o ${sample}_${params.humann_regroup_grouping}_named_${params.humann_version}.tsv
     """
 }
