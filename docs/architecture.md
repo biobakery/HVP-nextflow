@@ -293,7 +293,7 @@ nextflow run main.nf -profile harvard_rc --workflow mgx \
 nextflow run main.nf -profile harvard_rc --workflow mgx \
   --readsdir /path/to/fastqs --outdir /path/to/output \
   --humann_version humann_v4a \
-  --humann_db /n/huttenhower_lab/tools/nextflow/databases/humann4
+  --humann_db /n/lab_storage/huttenhower_lab/tools/nextflow/databases/humann4
 ```
 
 ### Viral profiling options (BAQLaVa)
@@ -328,11 +328,11 @@ Database paths are embedded in each cluster profile (`conf/databases/`). No sepa
 ```bash
 # Use mouse genome for KneadData (default: hg38)
 nextflow run main.nf -profile harvard_rc --workflow mgx \
-  --human_genome /n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
+  --human_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
   --readsdir /path/to/fastqs --outdir /path/to/output
 
 # Use ribosomal RNA database
-  --human_genome /n/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2
+  --human_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2
 
 # Switch MetaPhlAn database
   --metaphlan_db /path/to/metaphlan_databases \
@@ -340,7 +340,7 @@ nextflow run main.nf -profile harvard_rc --workflow mgx \
 
 # Switch to HUMAnN4 databases
   --humann_version humann_v4a \
-  --humann_db /n/huttenhower_lab/tools/nextflow/databases/humann4
+  --humann_db /n/lab_storage/huttenhower_lab/tools/nextflow/databases/humann4
 ```
 
 ### Database compatibility matrix (Harvard FASRC)
@@ -472,7 +472,7 @@ nextflow run main.nf \
 ### Module load
 
 ```bash
-source /n/huttenhower_lab/tools/hutlab/src/hutlabrc_rocky8.sh
+source /n/lab_storage/huttenhower_lab/tools/hutlab/src/hutlabrc_rocky8.sh
 hutlab load rocky8/biobakery-workflows-nextflow/0.0.1
 ```
 
@@ -494,18 +494,18 @@ These are auto-applied when using `-profile harvard_rc`. Override any on the CLI
 
 | Param | Path |
 |---|---|
-| `--human_genome` (hg38) | `/n/huttenhower_lab/data/kneaddata_databases/hg38` |
-| `--human_genome` (mouse) | `/n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL` |
-| `--human_genome` (rRNA) | `/n/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2` |
-| `--metaphlan_db` | `/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
+| `--human_genome` (hg38) | `/n/lab_storage/huttenhower_lab/data/kneaddata_databases/hg38` |
+| `--human_genome` (mouse) | `/n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL` |
+| `--human_genome` (rRNA) | `/n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2` |
+| `--metaphlan_db` | `/n/lab_storage/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
 | `--metaphlan_index` | `mpa_vJun23_CHOCOPhlAnSGB_202307` |
-| `--humann_db` (v3.9) | `/n/huttenhower_lab/tools/nextflow/databases/humann3` |
-| `--humann_db` (v4a) | `/n/huttenhower_lab/tools/nextflow/databases/humann4` |
+| `--humann_db` (v3.9) | `/n/lab_storage/huttenhower_lab/tools/nextflow/databases/humann3` |
+| `--humann_db` (v4a) | `/n/lab_storage/huttenhower_lab/tools/nextflow/databases/humann4` |
 | `--phylophlan_path` | Set manually if running `--workflow assembly` |
 
 ### Cluster-side files (not in repo)
 
 | File | Purpose |
 |---|---|
-| `/n/huttenhower_lab/tools/nextflow/24.10.4/bin/nextflow` | Nextflow binary |
+| `/n/lab_storage/huttenhower_lab/tools/nextflow/24.10.4/bin/nextflow` | Nextflow binary |
 | `rocky8/biobakery-workflows-nextflow/0.0.1` | Hutlab module file |

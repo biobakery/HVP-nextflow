@@ -71,7 +71,7 @@ Tools are pre-installed via the hutlab module system. No containers needed.
 
 ```sh
 # One-time setup (run once per login shell or add to ~/.bashrc)
-source /n/huttenhower_lab/tools/hutlab/src/hutlabrc_rocky8.sh
+source /n/lab_storage/huttenhower_lab/tools/hutlab/src/hutlabrc_rocky8.sh
 hutlab load rocky8/biobakery-workflows-nextflow/0.0.1
 
 # Verify Nextflow is available
@@ -376,7 +376,7 @@ Switch both the software module and the database:
 ```sh
 nextflow run main.nf -profile harvard_rc \
   --humann_version humann_v4a \
-  --humann_db /n/huttenhower_lab/tools/nextflow/databases/humann4 \
+  --humann_db /n/lab_storage/huttenhower_lab/tools/nextflow/databases/humann4 \
   --readsdir /path/to/fastqs \
   --outdir   results
 ```
@@ -393,12 +393,12 @@ Change only the KneadData reference; everything else stays the same.
 ```sh
 # Mouse C57BL reference
 nextflow run main.nf -profile harvard_rc \
-  --human_genome /n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
+  --human_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
   --readsdir /path/to/fastqs --outdir results
 
 # Ribosomal RNA (for rRNA depletion check)
 nextflow run main.nf -profile harvard_rc \
-  --human_genome /n/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2 \
+  --human_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2 \
   --readsdir /path/to/fastqs --outdir results
 ```
 
@@ -548,7 +548,7 @@ Every database path is a named parameter. Override on the command line without e
 
 ```sh
 nextflow run main.nf -profile harvard_rc \
-  --human_genome /n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
+  --human_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
   --readsdir /path/to/fastqs --outdir results
 ```
 
@@ -556,13 +556,13 @@ nextflow run main.nf -profile harvard_rc \
 
 | Tool | Reference | Path |
 |---|---|---|
-| KneadData | Human hg38 | `/n/huttenhower_lab/data/kneaddata_databases/hg38` |
-| KneadData | Mouse C57BL | `/n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL` |
-| KneadData | Ribosomal RNA | `/n/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2` |
-| MetaPhlAn | `mpa_vJun23_CHOCOPhlAnSGB_202307` *(default)* | `/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
-| MetaPhlAn | `mpa_vOct22_CHOCOPhlAnSGB_202403` | `/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.0.6_vOct_fixed/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
-| HUMAnN 3.9 | ChocoPhlAn + UniRef90 | `/n/huttenhower_lab/tools/nextflow/databases/humann3` |
-| HUMAnN 4 | nucleotide + protein | `/n/huttenhower_lab/tools/nextflow/databases/humann4` |
+| KneadData | Human hg38 | `/n/lab_storage/huttenhower_lab/data/kneaddata_databases/hg38` |
+| KneadData | Mouse C57BL | `/n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL` |
+| KneadData | Ribosomal RNA | `/n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2` |
+| MetaPhlAn | `mpa_vJun23_CHOCOPhlAnSGB_202307` *(default)* | `/n/lab_storage/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
+| MetaPhlAn | `mpa_vOct22_CHOCOPhlAnSGB_202403` | `/n/lab_storage/huttenhower_lab/tools/metaphlan4/rocky8/v4.0.6_vOct_fixed/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
+| HUMAnN 3.9 | ChocoPhlAn + UniRef90 | `/n/lab_storage/huttenhower_lab/tools/nextflow/databases/humann3` |
+| HUMAnN 4 | nucleotide + protein | `/n/lab_storage/huttenhower_lab/tools/nextflow/databases/humann4` |
 
 ### Downloading databases
 
@@ -704,7 +704,7 @@ nf-test test tests/main.nf.test         --profile tufts_hpc
 nf-test test tests/validate_output.nf.test --profile tufts_hpc
 
 # Locally (requires databases)
-nextflow run main.nf -profile standard -params-file template-params.yaml
+nextflow run main.nf -profile harvard_rc -params-file template-params.yaml
 ```
 
 CI runs automatically on every push via `.github/workflows/ci-tests.yml`.

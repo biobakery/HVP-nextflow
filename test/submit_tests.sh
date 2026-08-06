@@ -10,12 +10,12 @@
 set -euo pipefail
 
 # Load environment
-source /n/huttenhower_lab/tools/hutlab/src/hutlabrc_rocky8.sh
-module use /n/huttenhower_lab/tools/hutlab/src/modules_rocky8
+source /n/lab_storage/huttenhower_lab/tools/hutlab/src/hutlabrc_rocky8.sh
+module use /n/lab_storage/huttenhower_lab/tools/hutlab/src/modules_rocky8
 module load jdk/21.0.2-fasrc01
 
 # Confirm nextflow is reachable
-/n/huttenhower_lab/tools/nextflow/24.10.4/bin/nextflow -version
+/n/lab_storage/huttenhower_lab/tools/nextflow/24.10.4/bin/nextflow -version
 
 # Run the test suite from the repo root
 cd /n/home04/smaharjan/biobakery-nextflow

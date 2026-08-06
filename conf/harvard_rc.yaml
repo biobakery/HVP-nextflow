@@ -9,6 +9,14 @@
 ###   HUMAnN      4.0-alpha-1     hutlab: rocky8/humann4/4.0-alpha-1-final
 ###   BAQLaVa     1.2.0           hutlab: rocky8/baqlava/1.2.0  (optional)
 ###
+### Resources for a complete mgx run with viral profiling
+###   kneaddata  16 GB  /  8 h  / 8 cpus
+###   metaphlan  32 GB  / 12 h  / 8 cpus     (peaked ~17 GB on a 50 MB paired sample)
+###   humann     32 GB  / 12 h  / 8 cpus     (peaked ~15 GB)
+###   baqlava    48 GB  /  8 h  / 4 cpus     (peaked >16 GB; 16 GB OOM-killed it)
+###   assembly   64 GB megahit, 32 GB binning/checkm2, 32 GB phylophlan
+### All set in conf/profiles/harvard_rc.config and scaled by task.attempt on retry.
+###
 ### Compatible stack: MetaPhlAn 4.0.6_vOct22 + mpa_vOct22_CHOCOPhlAnSGB_202403
 ### is required for HUMAnN 4 and BAQLaVa 1.2.0 compatibility.
 ### BAQLaVa 1.2.0 auto-loads HUMAnN 4 and anadama2.
@@ -21,7 +29,7 @@
 ### SETUP (one-time, already done for the lab)
 ### ============================================================
 ###
-###   source /n/huttenhower_lab/tools/hutlab/src/hutlabrc_rocky8.sh
+###   source /n/lab_storage/huttenhower_lab/tools/hutlab/src/hutlabrc_rocky8.sh
 ###   hutlab load rocky8/biobakery-workflows-nextflow/0.0.2
 ###
 ###   After loading the module, $BIOBAKERY_NF_PIPELINE and $BIOBAKERY_NF_PARAMS
@@ -75,7 +83,7 @@
 ### ============================================================
 ###   Any value below can be overridden on the command line with --param_name value
 ###   without editing this file. Example:
-###     --human_genome /n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL
+###     --human_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL
 ###     --run_viral_profiling true
 ###     --workflow mgx_mtx
 ###
@@ -103,10 +111,10 @@ filepattern:  "*_R{1,2}*.fastq.gz"
 # ------------------------------------
 # param: --human_genome
 # Available databases on FASRC:
-#   hg38 (human):    /n/huttenhower_lab/data/kneaddata_databases/hg38
-#   mouse C57BL:     /n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL
-#   ribosomal RNA:   /n/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2
-human_genome: "/n/huttenhower_lab/data/kneaddata_databases/hg38"
+#   hg38 (human):    /n/lab_storage/huttenhower_lab/data/kneaddata_databases/hg38
+#   mouse C57BL:     /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL
+#   ribosomal RNA:   /n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2
+human_genome: "/n/lab_storage/huttenhower_lab/data/kneaddata_databases/hg38"
 
 # ------------------------------------
 # MetaPhlAn 4.1.1 — taxonomic profiling
@@ -119,11 +127,11 @@ human_genome: "/n/huttenhower_lab/data/kneaddata_databases/hg38"
 #
 # Available databases on FASRC:
 #   mpa_vOct22_CHOCOPhlAnSGB_202403 (default — required for HUMAnN 4 and BAQLaVa 1.2.0):
-#     /n/huttenhower_lab/tools/metaphlan4/rocky8/v4.0.6_vOct_fixed/lib/python3.10/site-packages/metaphlan/metaphlan_databases
+#     /n/lab_storage/huttenhower_lab/tools/metaphlan4/rocky8/v4.0.6_vOct_fixed/lib/python3.10/site-packages/metaphlan/metaphlan_databases
 #   mpa_vJun23_CHOCOPhlAnSGB_202307 (use with HUMAnN 3.9 / BAQLaVa 0.5.0 only — NOT compatible with BAQLaVa 1.2.0):
-#     /n/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases
+#     /n/lab_storage/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases
 metaphlan_version: "metaphlan_4.0.6_fixed"
-metaphlan_db:      "/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.0.6_vOct_fixed/lib/python3.10/site-packages/metaphlan/metaphlan_databases"
+metaphlan_db:      "/n/lab_storage/huttenhower_lab/tools/metaphlan4/rocky8/v4.0.6_vOct_fixed/lib/python3.10/site-packages/metaphlan/metaphlan_databases"
 metaphlan_index:   "mpa_vOct22_CHOCOPhlAnSGB_202403"
 
 # ------------------------------------
@@ -132,22 +140,22 @@ metaphlan_index:   "mpa_vOct22_CHOCOPhlAnSGB_202403"
 # param: --humann_version   output file naming: "humann_v37" or "humann_v4a"
 # param: --humann_db        parent dir; pipeline appends /chocophlan, /uniref, /utility_mapping
 #
-# The symlink directory at /n/huttenhower_lab/tools/nextflow/databases/humann3 maps:
-#   chocophlan/      → /n/huttenhower_lab/data/humann3_databases/version_3.1/chocophlan
-#   uniref/          → /n/huttenhower_lab/data/humann3_databases/version_3.0.0-final/uniref90
-#   utility_mapping/ → /n/huttenhower_lab/data/humann3_databases/version_3.0.0-final/utility_mapping
+# The symlink directory at /n/lab_storage/huttenhower_lab/tools/nextflow/databases/humann3 maps:
+#   chocophlan/      → /n/lab_storage/huttenhower_lab/data/humann3_databases/version_3.1/chocophlan
+#   uniref/          → /n/lab_storage/huttenhower_lab/data/humann3_databases/version_3.0.0-final/uniref90
+#   utility_mapping/ → /n/lab_storage/huttenhower_lab/data/humann3_databases/version_3.0.0-final/utility_mapping
 #
 # HUMAnN 4 databases (default — required for BAQLaVa 1.2.0):
-#   chocophlan/      → /n/huttenhower_lab/data/humann4_databases/nucleotide_v4-alpha_final
-#   uniref/          → /n/huttenhower_lab/data/humann4_databases/protein_ec_filtered
-#   utility_mapping/ → /n/huttenhower_lab/data/humann4_databases/utility_mapping_v4-alpha_final
+#   chocophlan/      → /n/lab_storage/huttenhower_lab/data/humann4_databases/nucleotide_v4-alpha_final
+#   uniref/          → /n/lab_storage/huttenhower_lab/data/humann4_databases/protein_ec_filtered
+#   utility_mapping/ → /n/lab_storage/huttenhower_lab/data/humann4_databases/utility_mapping_v4-alpha_final
 #
 # To use HUMAnN 3.9 instead (also update beforeScript in conf/profiles/harvard_rc.config to rocky8/humann3/3.9-devel):
 #   humann_version: "humann_v37"
-#   humann_db: "/n/huttenhower_lab/tools/nextflow/databases/humann3"
+#   humann_db: "/n/lab_storage/huttenhower_lab/tools/nextflow/databases/humann3"
 #   (also switch metaphlan to 4.1.1 + mpa_vJun23 and baqlava to 0.5.0-devel)
 humann_version: "humann_v4a"
-humann_db:      "/n/huttenhower_lab/tools/nextflow/databases/humann4"
+humann_db:      "/n/lab_storage/huttenhower_lab/tools/nextflow/databases/humann4"
 
 # ------------------------------------
 # BAQLaVa — viral profiling (optional)
@@ -157,6 +165,13 @@ humann_db:      "/n/huttenhower_lab/tools/nextflow/databases/humann4"
 #   Keep false for real microbiome samples (depletion removes bacterial reads before viral search).
 #   Set true only for test/tiny samples where MetaPhlAn prescreen finds 0 species (HUMAnN
 #   would skip alignment and not produce the unaligned reads file baqlava needs).
+#
+# Resources (set in conf/profiles/harvard_rc.config, not here):
+#   baqlava   48 GB x attempt, 8 h, 4 cpus
+# BAQLaVa runs HUMAnN internally for bacterial depletion and a DIAMOND
+# translated search, so it needs at least as much memory as the humann process
+# itself (32 GB). At 16 GB it was OOM-killed at a 15.69 GB peak. Slurm reports
+# these as exit 125, which conf/base.config now retries.
 run_viral_profiling:      false
 baqlava_bypass_depletion: false
 

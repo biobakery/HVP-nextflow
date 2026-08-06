@@ -7,7 +7,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RESULTS_BASE="${REPO_ROOT}/test/results"
-NF="/n/huttenhower_lab/tools/nextflow/24.10.4/bin/nextflow"
+NF="/n/lab_storage/huttenhower_lab/tools/nextflow/24.10.4/bin/nextflow"
 PROFILE="-profile harvard_rc -params-file ${REPO_ROOT}/conf/harvard_rc.yaml"
 COMMON="--run_viral_profiling false --run_strain_profiling false"
 

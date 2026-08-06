@@ -19,13 +19,13 @@ process humann_merge {
     script:
     """
     if ls *_genefamilies_*.tsv 1>/dev/null 2>&1; then
-        humann_join_tables -i . --file-name genefamilies -o merged_genefamilies_${params.humann_version}.tsv
+        humann_join_tables -i . --file_name genefamilies -o merged_genefamilies_${params.humann_version}.tsv
     fi
     if ls *_pathabundance_*.tsv 1>/dev/null 2>&1; then
-        humann_join_tables -i . --file-name pathabundance -o merged_pathabundance_${params.humann_version}.tsv
+        humann_join_tables -i . --file_name pathabundance -o merged_pathabundance_${params.humann_version}.tsv
     fi
     if ls *_pathcoverage_*.tsv 1>/dev/null 2>&1; then
-        humann_join_tables -i . --file-name pathcoverage -o merged_pathcoverage_${params.humann_version}.tsv
+        humann_join_tables -i . --file_name pathcoverage -o merged_pathcoverage_${params.humann_version}.tsv
     fi
     """
 }

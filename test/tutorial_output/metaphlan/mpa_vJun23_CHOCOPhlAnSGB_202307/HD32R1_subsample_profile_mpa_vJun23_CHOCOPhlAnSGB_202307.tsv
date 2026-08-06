@@ -1,5 +1,5 @@
 #mpa_vJun23_CHOCOPhlAnSGB_202307
-#/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/bin/metaphlan HD32R1_subsample_kneaddata.fastq.gz -o HD32R1_subsample_profile_mpa_vJun23_CHOCOPhlAnSGB_202307.tsv --bowtie2out HD32R1_subsample_bowtie2_mpa_vJun23_CHOCOPhlAnSGB_202307.tsv --samout HD32R1_subsample_mpa_vJun23_CHOCOPhlAnSGB_202307.sam --input_type fastq --nproc 8 --bowtie2db /n/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases --index mpa_vJun23_CHOCOPhlAnSGB_202307 -t rel_ab_w_read_stats
+#/n/lab_storage/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/bin/metaphlan HD32R1_subsample_kneaddata.fastq.gz -o HD32R1_subsample_profile_mpa_vJun23_CHOCOPhlAnSGB_202307.tsv --bowtie2out HD32R1_subsample_bowtie2_mpa_vJun23_CHOCOPhlAnSGB_202307.tsv --samout HD32R1_subsample_mpa_vJun23_CHOCOPhlAnSGB_202307.sam --input_type fastq --nproc 8 --bowtie2db /n/lab_storage/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases --index mpa_vJun23_CHOCOPhlAnSGB_202307 -t rel_ab_w_read_stats
 #34611 reads processed
 #Average read length 94.83066077258675
 #SampleID	Metaphlan_Analysis
