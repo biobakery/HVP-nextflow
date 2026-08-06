@@ -32,5 +32,7 @@ workflow QUALITY_CONTROL {
 
     emit:
     reads = all_cleaned  // Channel: [ [id, paired_end], cleaned_reads ]
-    log   = all_logs
+    // named "logs", not "log": Nextflow already binds "log" to its own logger,
+    // so emitting that name fails at runtime with "No such variable: log"
+    logs  = all_logs
 }
