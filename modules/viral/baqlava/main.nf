@@ -17,6 +17,8 @@ process baqlava {
     params.run_viral_profiling
 
     script:
+
+    def extra_args = params.baqlava_options ?: ""
     // Use taxonomic profile for bacterial depletion, or bypass for test/tiny samples with 0 detected species
     def depletion_flag = params.baqlava_bypass_depletion ? "--bypass-bacterial-depletion" : "--taxonomic-profile $profile"
     def db_flag        = params.baqlava_db               ? "--database ${params.baqlava_db}" : ""
@@ -27,6 +29,7 @@ process baqlava {
         -o ${sample}_baqlava \\
         --threads ${task.cpus} \\
         --local-jobs 1 \\
-        $db_flag
+        $db_flag \\
+        $extra_args
     """
 }

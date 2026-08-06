@@ -18,6 +18,8 @@ process metaphlan {
     params.run_taxonomic_profiling
 
     script:
+
+    def extra_args = params.metaphlan_options ?: ""
     // Resolve CLI flag differences between MetaPhlAn versions
     def db_arg  = (params.metaphlan_version == 'metaphlan_v4')
                     ? "--db_dir ${params.metaphlan_db}"
@@ -35,7 +37,8 @@ process metaphlan {
         --samout ${sample}_${params.metaphlan_index}.sam \\
         --read_min_len ${params.metaphlan_read_min_len} \\
         --nproc ${task.cpus} \\
-        -o ${sample}_profile_${params.metaphlan_index}.tsv
+        -o ${sample}_profile_${params.metaphlan_index}.tsv \\
+        $extra_args
     """
 }
 

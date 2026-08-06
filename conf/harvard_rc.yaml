@@ -83,7 +83,7 @@
 ### ============================================================
 ###   Any value below can be overridden on the command line with --param_name value
 ###   without editing this file. Example:
-###     --human_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL
+###     --host_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL
 ###     --run_viral_profiling true
 ###     --workflow mgx_mtx
 ###
@@ -109,12 +109,12 @@ filepattern:  "*_R{1,2}*.fastq.gz"
 # ------------------------------------
 # KneadData — host decontamination
 # ------------------------------------
-# param: --human_genome
+# param: --host_genome
 # Available databases on FASRC:
 #   hg38 (human):    /n/lab_storage/huttenhower_lab/data/kneaddata_databases/hg38
 #   mouse C57BL:     /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL
 #   ribosomal RNA:   /n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2
-human_genome: "/n/lab_storage/huttenhower_lab/data/kneaddata_databases/hg38"
+host_genome: "/n/lab_storage/huttenhower_lab/data/kneaddata_databases/hg38"
 
 # ------------------------------------
 # MetaPhlAn 4.1.1 — taxonomic profiling

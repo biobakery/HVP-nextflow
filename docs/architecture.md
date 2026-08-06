@@ -177,7 +177,7 @@ biobakery-nextflow/
 | `workflow.parse_args()` | `params.*` + `-params-file` | ✅ | |
 | `--input` | `--readsdir` + `--filepattern` | ✅ | |
 | `--output` | `--outdir` | ✅ | |
-| `--contaminate-databases` | `--human_genome` | ✅ | |
+| `--contaminate-databases` | `--host_genome` | ✅ | |
 | `--threads` | `process.cpus` | ✅ | Per-process in `conf/base.config` |
 | `--grid` / `--grid-partition` | `-profile` / `queue` | ✅ | |
 | `--bypass-quality-control` | `--run_qc false` | ✅ | |
@@ -328,11 +328,11 @@ Database paths are embedded in each cluster profile (`conf/databases/`). No sepa
 ```bash
 # Use mouse genome for KneadData (default: hg38)
 nextflow run main.nf -profile harvard_rc --workflow mgx \
-  --human_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
+  --host_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
   --readsdir /path/to/fastqs --outdir /path/to/output
 
 # Use ribosomal RNA database
-  --human_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2
+  --host_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2
 
 # Switch MetaPhlAn database
   --metaphlan_db /path/to/metaphlan_databases \
@@ -494,9 +494,9 @@ These are auto-applied when using `-profile harvard_rc`. Override any on the CLI
 
 | Param | Path |
 |---|---|
-| `--human_genome` (hg38) | `/n/lab_storage/huttenhower_lab/data/kneaddata_databases/hg38` |
-| `--human_genome` (mouse) | `/n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL` |
-| `--human_genome` (rRNA) | `/n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2` |
+| `--host_genome` (hg38) | `/n/lab_storage/huttenhower_lab/data/kneaddata_databases/hg38` |
+| `--host_genome` (mouse) | `/n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL` |
+| `--host_genome` (rRNA) | `/n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2` |
 | `--metaphlan_db` | `/n/lab_storage/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases` |
 | `--metaphlan_index` | `mpa_vJun23_CHOCOPhlAnSGB_202307` |
 | `--humann_db` (v3.9) | `/n/lab_storage/huttenhower_lab/tools/nextflow/databases/humann3` |

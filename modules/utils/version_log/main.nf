@@ -42,7 +42,7 @@ process version_log {
         echo "----------------------------------------------------------------"
         echo "  Database Paths"
         echo "----------------------------------------------------------------"
-        echo "human_genome:     ${params.human_genome}"
+        echo "host_genome:     ${params.host_genome}"
         echo "metaphlan_db:     ${params.metaphlan_db}"
         echo "metaphlan_index:  ${params.metaphlan_index}"
         echo "humann_db:        ${params.humann_db}"

@@ -137,7 +137,7 @@ conda activate biobakery
 nextflow run main.nf -profile local \
   --readsdir /path/to/fastqs \
   --outdir   /path/to/results \
-  --human_genome  /path/to/kneaddata/hg38 \
+  --host_genome  /path/to/kneaddata/hg38 \
   --metaphlan_db  /path/to/metaphlan_db \
   --humann_db     /path/to/humann_db
 ```
@@ -156,7 +156,7 @@ nextflow run main.nf \
   --workflow     mgx \
   --readsdir     /path/to/fastqs \
   --outdir       results \
-  --human_genome /path/to/kneaddata/hg38 \
+  --host_genome /path/to/kneaddata/hg38 \
   --metaphlan_db /path/to/metaphlan_db \
   --humann_db    /path/to/humann_db
 ```
@@ -393,12 +393,12 @@ Change only the KneadData reference; everything else stays the same.
 ```sh
 # Mouse C57BL reference
 nextflow run main.nf -profile harvard_rc \
-  --human_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
+  --host_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
   --readsdir /path/to/fastqs --outdir results
 
 # Ribosomal RNA (for rRNA depletion check)
 nextflow run main.nf -profile harvard_rc \
-  --human_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2 \
+  --host_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2 \
   --readsdir /path/to/fastqs --outdir results
 ```
 
@@ -452,7 +452,7 @@ nextflow run main.nf -profile harvard_rc \
 
 | Parameter | Default | Description |
 |---|---|---|
-| `--human_genome` | *required* | KneadData Bowtie2 reference directory (hg38, mouse, rRNA, etc.) |
+| `--host_genome` | *required* | KneadData Bowtie2 reference directory (hg38, mouse, rRNA, etc.) |
 | `--kneaddata_bypass_trim` | `false` | Skip Trimmomatic trimming step |
 | `--kneaddata_remove_intermediate_files` | `true` | Delete intermediate files to save disk |
 
@@ -548,7 +548,7 @@ Every database path is a named parameter. Override on the command line without e
 
 ```sh
 nextflow run main.nf -profile harvard_rc \
-  --human_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
+  --host_genome /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL \
   --readsdir /path/to/fastqs --outdir results
 ```
 
@@ -568,7 +568,7 @@ nextflow run main.nf -profile harvard_rc \
 
 **KneadData:**
 ```sh
-kneaddata_database --download human_genome bowtie2 /path/to/kneaddata_databases
+kneaddata_database --download host_genome bowtie2 /path/to/kneaddata_databases
 ```
 
 **MetaPhlAn** (do not put multiple indexes in the same directory):

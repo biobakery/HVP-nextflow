@@ -1,6 +1,7 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
+include { READ_INPUT }           from '../subworkflows/read_input.nf'
 include { QUALITY_CONTROL }      from '../subworkflows/quality_control.nf'
 include { TAXONOMIC_PROFILING }  from '../subworkflows/taxonomic_profiling.nf'
 include { FUNCTIONAL_PROFILING } from '../subworkflows/functional_profiling.nf'
@@ -13,18 +14,9 @@ workflow MGX {
 
     main:
     // ── Build input channel ────────────────────────────────────────────────
-    if (params.paired_end) {
-        read_ch = Channel
-            .fromFilePairs("${params.readsdir}/${params.filepattern}", checkIfExists: true)
-            .map { sample, reads -> [ [id: sample, paired_end: true], reads ] }
-    } else {
-        read_ch = Channel
-            .fromPath("${params.readsdir}/${params.filepattern}", checkIfExists: true)
-            .map { f ->
-                def sample = f.baseName.replaceFirst(/(\.fastq|\.fq)$/, '')
-                [ [id: sample, paired_end: false], f ]
-            }
-    }
+    // Layout is detected from the filenames; see subworkflows/read_input.nf
+    READ_INPUT()
+    read_ch = READ_INPUT.out.reads
 
     // ── QC (KneadData) ────────────────────────────────────────────────────
     if (params.run_qc) {
@@ -39,20 +31,32 @@ workflow MGX {
         TAXONOMIC_PROFILING(cleaned)
     }
 
+    // Functional, viral and strain profiling all consume MetaPhlAn output, so
+    // fail fast and consistently rather than silently skipping the stage.
+    if (!params.run_taxonomic_profiling) {
+        def dependents = []
+        if (params.run_functional_profiling) dependents << 'run_functional_profiling (HUMAnN needs the MetaPhlAn profile)'
+        if (params.run_viral_profiling)      dependents << 'run_viral_profiling (BAQLaVa needs the MetaPhlAn profile)'
+        if (params.run_strain_profiling)     dependents << 'run_strain_profiling (StrainPhlAn needs the MetaPhlAn SAM)'
+        if (dependents) {
+            error "ERROR: run_taxonomic_profiling = false, but these require it:\n  - " +
+                  dependents.join("\n  - ") +
+                  "\nEnable run_taxonomic_profiling, or turn the above off."
+        }
+    }
+
     // ── Functional profiling (HUMAnN) ─────────────────────────────────────
-    if (params.run_functional_profiling && params.run_taxonomic_profiling) {
+    if (params.run_functional_profiling) {
         FUNCTIONAL_PROFILING(cleaned, TAXONOMIC_PROFILING.out.profile)
     }
 
     // ── Viral profiling (BAQLaVa) ──────────────────────────────────────────
-    if (params.run_viral_profiling && params.run_taxonomic_profiling) {
+    if (params.run_viral_profiling) {
         VIRAL_PROFILING(cleaned, TAXONOMIC_PROFILING.out.profile)
-    } else if (params.run_viral_profiling) {
-        error "ERROR: run_viral_profiling requires run_taxonomic_profiling = true (MetaPhlAn profile needed by BAQLaVa)"
     }
 
     // ── Strain profiling (StrainPhlAn) ────────────────────────────────────
-    if (params.run_strain_profiling && params.run_taxonomic_profiling) {
+    if (params.run_strain_profiling) {
         STRAIN_PROFILING(TAXONOMIC_PROFILING.out.sam_bzip)
     }
 

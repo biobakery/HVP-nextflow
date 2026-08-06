@@ -18,17 +18,20 @@ process single_end_kneaddata {
     params.run_qc
 
     script:
+
+    def extra_args = params.kneaddata_options ?: ""
     def bypass      = params.kneaddata_bypass_trim               ? "--bypass-trim"                  : ""
     def remove_inter = params.kneaddata_remove_intermediate_files ? "--remove-intermediate-output"   : ""
     """
     kneaddata \\
         --unpaired $reads \\
-        --reference-db ${params.human_genome} \\
+        --reference-db ${params.host_genome} \\
         --output ./ \\
         --threads ${task.cpus} \\
         --output-prefix ${sample}_kneaddata \\
         $bypass \\
-        $remove_inter
+        $remove_inter \\
+        $extra_args
 
     for f in *.fastq; do [ -f "\$f" ] && pigz -p ${task.cpus} "\$f"; done
     """
@@ -55,18 +58,21 @@ process paired_end_kneaddata {
     params.run_qc
 
     script:
+
+    def extra_args = params.kneaddata_options ?: ""
     def bypass       = params.kneaddata_bypass_trim               ? "--bypass-trim"                 : ""
     def remove_inter = params.kneaddata_remove_intermediate_files ? "--remove-intermediate-output"  : ""
     """
     kneaddata \\
         -i1 ${reads[0]} \\
         -i2 ${reads[1]} \\
-        --reference-db ${params.human_genome} \\
+        --reference-db ${params.host_genome} \\
         --output ./ \\
         --processes ${task.cpus} \\
         --output-prefix ${sample}_kneaddata \\
         $bypass \\
-        $remove_inter
+        $remove_inter \\
+        $extra_args
 
     for f in *.fastq; do [ -f "\$f" ] && pigz -p ${task.cpus} "\$f"; done
 

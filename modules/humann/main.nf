@@ -21,6 +21,8 @@ process humann {
     params.run_functional_profiling
 
     script:
+
+    def extra_args = params.humann_options ?: ""
     def bypass_prescreen  = params.humann_bypass_prescreen          ? "--bypass-prescreen"         : ""
     def bypass_nucleotide = params.humann_bypass_nucleotide_search   ? "--bypass-nucleotide-search" : ""
     def utility_db        = (params.humann_version == 'humann_v4a') ? "--utility-database ${params.humann_db}/utility_mapping" : ""
@@ -35,7 +37,8 @@ process humann {
         --threads ${task.cpus} \\
         --output-basename ${sample} \\
         $bypass_prescreen \\
-        $bypass_nucleotide
+        $bypass_nucleotide \\
+        $extra_args
 
     # Rename outputs to versioned filenames
     if [ "${params.humann_version}" = "humann_v4a" ]; then

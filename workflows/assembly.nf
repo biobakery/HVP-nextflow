@@ -1,6 +1,7 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
+include { READ_INPUT }             from '../subworkflows/read_input.nf'
 include { QUALITY_CONTROL }        from '../subworkflows/quality_control.nf'
 include { megahit }                from '../modules/assembly/megahit/main.nf'
 include { align_and_depth }        from '../modules/utils/align_and_depth/main.nf'
@@ -27,21 +28,9 @@ workflow ASSEMBLY {
     main:
 
     // ── Build input channel ───────────────────────────────────────────────
-    if (!params.readsdir) {
-        error "ERROR: --readsdir is required for assembly workflow"
-    }
-    if (params.paired_end) {
-        reads = Channel
-            .fromFilePairs("${params.readsdir}/${params.filepattern}", checkIfExists: true)
-            .map { sample, files -> [ [id: sample, paired_end: true], files ] }
-    } else {
-        reads = Channel
-            .fromPath("${params.readsdir}/${params.filepattern}", checkIfExists: true)
-            .map { f ->
-                def sample = f.baseName.replaceFirst(/(\.fastq|\.fq)(\.gz)?$/, '')
-                [ [id: sample, paired_end: false], f ]
-            }
-    }
+    // Layout is detected from the filenames; see subworkflows/read_input.nf
+    READ_INPUT()
+    reads = READ_INPUT.out.reads
 
     // ── Step 1: Host decontamination (KneadData) ──────────────────────────
     // KneadData carries a "when: params.run_qc" guard, so with --run_qc false the

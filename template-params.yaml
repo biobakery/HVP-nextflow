@@ -50,7 +50,7 @@ filepattern: "*_R{1,2}*.fastq.gz"        # single-end: "*.fastq.gz"
 
 ### Host decontamination (KneadData)
 
-human_genome: "/n/lab_storage/huttenhower_lab/data/kneaddata_databases/hg38"
+host_genome: "/n/lab_storage/huttenhower_lab/data/kneaddata_databases/hg38"
 # Mouse:      "/n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL"
 # rRNA:       "/n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2"
 

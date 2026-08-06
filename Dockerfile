@@ -4,7 +4,7 @@
 #
 # Build:  docker build -t biobakery-nextflow .
 # Run:    nextflow run main.nf -profile standard \
-#           --human_genome /databases/kneaddata/hg38 \
+#           --host_genome /databases/kneaddata/hg38 \
 #           --metaphlan_db /databases/metaphlan/mpa_vOct22_CHOCOPhlAnSGB_202403 \
 #           --metaphlan_index mpa_vOct22_CHOCOPhlAnSGB_202403 \
 #           --humann_db /databases/humann3
