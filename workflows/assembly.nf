@@ -5,6 +5,7 @@ include { QUALITY_CONTROL }        from '../subworkflows/quality_control.nf'
 include { megahit }                from '../modules/assembly/megahit/main.nf'
 include { align_and_depth }        from '../modules/utils/align_and_depth/main.nf'
 include { metabat2 }               from '../modules/binning/metabat2/main.nf'
+include { abundance }              from '../modules/utils/abundance/main.nf'
 include { checkm2 }                from '../modules/qc/checkm2/main.nf'
 include { checkm2_merge }          from '../modules/qc/checkm2/main.nf'
 include { mag_n50 }                from '../modules/qc/checkm2/main.nf'
@@ -100,8 +101,28 @@ workflow ASSEMBLY {
 
     sgbs = sgb_cluster(distances.distances, phylo_merged.relab, qa_n50.qa_n50, bins_root)
 
-    // ── Step 8: Merge abundance + taxonomy → final profile ────────────────
-    abundance_dir = depth_out.bam.map { s, b -> b.parent }.first()
+    // ── Step 8: Per-sample MAG abundance ──────────────────────────────────
+    // The anadama2 workflow computes this with CheckM coverage/profile; without
+    // it there are no *.abundance.tsv files for the merge below to read.
+    abundance_out = abundance(
+        bins_out.bins,
+        depth_out.bam,
+        contigs_out.contigs,
+        assembly_input
+    )
+
+    // ── Step 9: Merge abundance + taxonomy → final profile ────────────────
+    // Collect the per-sample tables so they are all staged into the merge task's
+    // directory, which is then passed as the input folder.
+    // merge_tax_and_abundance.R reads three things from this folder: the
+    // *.abundance.tsv tables, and the per-sample mapped/total read counts it uses
+    // to scale them. Staging only the tables left mapped_props empty and the
+    // script failed setting colnames on it.
+    abundance_dir = abundance_out.abundance
+        .mix(abundance_out.coverage)
+        .mix(abundance_out.mapped_reads)
+        .mix(abundance_out.total_reads)
+        .collect()
     merge_tax_abundance(
         abundance_dir,
         phylo_merged.relab,

@@ -43,8 +43,12 @@ process checkm2_merge {
 
     script:
     """
-    head -1 \$(ls *.tsv | head -1) > merged_quality_report.tsv
-    for f in *.tsv; do
+    # Capture the input list first: the output is also a .tsv here, so a later
+    # glob can pick the partial output up as one of its own inputs. It happens to
+    # be safe today only because "merged_" sorts before the staged input names.
+    ls *.tsv | sort > .checkm2_inputs.txt
+    head -1 \$(head -1 .checkm2_inputs.txt) > merged_quality_report.tsv
+    for f in \$(cat .checkm2_inputs.txt); do
         tail -n +2 "\$f" >> merged_quality_report.tsv
     done
     """

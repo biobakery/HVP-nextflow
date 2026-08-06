@@ -36,7 +36,9 @@ process phylophlan_metagenomic {
             -e fa \\
             --database_folder ${db_folder} \\
             ${extra}
-        mv phylophlan_out.tsv phylophlan_out.tsv
+        # phylophlan writes phylophlan_out.tsv directly from -o phylophlan_out;
+        # the previous self-move here failed with "are the same file" and took the
+        # task down after the full 20+ minute mash dist had already succeeded
     else
         echo -e "line1\nline2\nline3\n#mag\tsgb\tggb\tfgb\tref" > phylophlan_out.tsv
     fi
@@ -56,11 +58,22 @@ process phylophlan_merge {
 
     script:
     """
-    # Merge: keep first file header, append data rows from the rest
-    head -1 \$(ls *.tsv | head -1) > phylophlan_out.tsv
-    for f in *.tsv; do
-        tail -n +5 "\$f" >> phylophlan_out.tsv
+    # Take the first file whole, then append only the data rows of the others,
+    # as the anadama2 workflow does. PhyloPhlAn writes a four-line header
+    # (#last SGB/GGB/FGB id, then #input_bin), and phylophlan_add_tax_assignment.py
+    # reads the result with skiprows=[0,1,2], so the full header has to survive.
+    # Previously this kept only "head -1", losing three header lines, and the loop
+    # ran over every file including the first, duplicating its data rows.
+    # Capture the input list before writing anything: the output is also a .tsv
+    # in this directory, so re-globbing mid-merge picks the partial output up as
+    # one of its own inputs and duplicates every row.
+    ls *.tsv | sort > .phylophlan_inputs.txt
+    first=\$(head -1 .phylophlan_inputs.txt)
+    cat "\$first" > merged_tmp.tsv
+    tail -n +2 .phylophlan_inputs.txt | while read -r f; do
+        tail -n +5 "\$f" >> merged_tmp.tsv
     done
+    mv merged_tmp.tsv phylophlan_out.tsv
 
     python ${projectDir}/bin/scripts/phylophlan_add_tax_assignment.py \\
         --table phylophlan_out.tsv \\

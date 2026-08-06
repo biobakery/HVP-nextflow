@@ -92,7 +92,7 @@ process sgb_cluster {
     path mash_distances
     path phylophlan_relab
     path checkm_qa_n50
-    path qc_bins_dir
+    path bins_root   // per-sample bins root; mash_list_inputs writes qc_bins/ inside it
 
     output:
     path "SGB_info.tsv",     emit: sgb_info
@@ -111,7 +111,14 @@ process sgb_cluster {
             --phylo ${phylophlan_relab} \\
             --out_dir . \\
             --threads ${task.cpus} \\
-            --mag_dir ${qc_bins_dir}
+            --mag_dir ${bins_root}/qc_bins
+
+        # mash_clusters.R writes into <out_dir>/sgbs/ and <out_dir>/fastANI/, but
+        # the declared outputs are at the top level (and that is where the branch
+        # above writes them). Without this the task exits 0 and nextflow then
+        # reports the outputs as missing.
+        cp sgbs/SGB_info.tsv SGB_info.tsv
+        if [ -f fastANI/SGB_list.txt ]; then cp fastANI/SGB_list.txt SGB_list.txt; fi
     fi
     """
 }
@@ -121,7 +128,7 @@ process merge_tax_abundance {
     publishDir "${params.outdir}", mode: 'copy'
 
     input:
-    path abundance_dir
+    path abundance_tables   // collected *.abundance.tsv, staged into this directory
     path phylophlan_relab
     path checkm_qa_n50
     path sgb_info
@@ -133,7 +140,7 @@ process merge_tax_abundance {
     def abundance_type = params.sgb_abundance_type ?: "by_sample"
     """
     Rscript ${projectDir}/bin/Rscripts/merge_tax_and_abundance.R \\
-        -i ${abundance_dir} \\
+        -i . \\
         --tax ${phylophlan_relab} \\
         --qa ${checkm_qa_n50} \\
         --sgbs ${sgb_info} \\
