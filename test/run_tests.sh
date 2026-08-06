@@ -107,7 +107,7 @@ check "paired-end merged MetaPhlAn table" "${OUT}/metaphlan" "merged_metaphlan_p
 
 # ── Test 4: toggle guard — viral without taxonomic must error ─────────────────
 echo ""
-echo "=== Test 4: toggle guard — run_baqlava=true without taxonomic_profiling ==="
+echo "=== Test 4: toggle guard — run_viral_profiling=true without taxonomic_profiling ==="
 "${NF}" run "${REPO_ROOT}/main.nf" ${PROFILE} \
     --workflow mgx \
     --readsdir "${REPO_ROOT}/test/single_end_rawfastq" \
@@ -117,7 +117,7 @@ echo "=== Test 4: toggle guard — run_baqlava=true without taxonomic_profiling 
     --run_qc false \
     --run_taxonomic_profiling false \
     --run_functional_profiling false \
-    --run_baqlava true \
+    --run_viral_profiling true \
     --log_versions false \
     2>&1 | grep "ERROR" | head -2 | tee "${RESULTS_BASE}/test4.log" || true
 

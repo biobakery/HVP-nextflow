@@ -64,7 +64,7 @@
 ###     Available: mgx | mtx | mgx_mtx | 16s | vis | stats | assembly
 ###
 ###   With BAQLaVa viral profiling:
-###     add --run_baqlava true
+###     add --run_viral_profiling true
 ###     (for test samples with 0 prescreen species also add --baqlava_bypass_depletion true)
 ###
 ###   With StrainPhlAn strain profiling:
@@ -76,7 +76,7 @@
 ###   Any value below can be overridden on the command line with --param_name value
 ###   without editing this file. Example:
 ###     --human_genome /n/huttenhower_lab/data/kneaddata_databases/mouse_C57BL
-###     --run_baqlava true
+###     --run_viral_profiling true
 ###     --workflow mgx_mtx
 ###
 ### ============================================================
@@ -152,12 +152,12 @@ humann_db:      "/n/huttenhower_lab/tools/nextflow/databases/humann4"
 # ------------------------------------
 # BAQLaVa — viral profiling (optional)
 # ------------------------------------
-# param: --run_baqlava               true/false — enable the baqlava process (default: false)
+# param: --run_viral_profiling       true/false — enable the baqlava process (default: false)
 # param: --baqlava_bypass_depletion  true/false — bypass internal HUMAnN bacterial depletion step
 #   Keep false for real microbiome samples (depletion removes bacterial reads before viral search).
 #   Set true only for test/tiny samples where MetaPhlAn prescreen finds 0 species (HUMAnN
 #   would skip alignment and not produce the unaligned reads file baqlava needs).
-run_baqlava:              false
+run_viral_profiling:      false
 baqlava_bypass_depletion: false
 
 # ------------------------------------

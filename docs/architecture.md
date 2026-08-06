@@ -19,7 +19,7 @@
 | Feature flag toggles | `run_qc`, `run_taxonomic_profiling`, `run_functional_profiling`, `run_viral_profiling`, `run_strain_profiling` |
 | HUMAnN post-processing | `humann_regroup`, `humann_rename`, `humann_merge` — all implemented |
 | StrainPhlAn subworkflow | `sample2markers` → `strainphlan` per clade; SGB mode |
-| BAQLaVa viral profiling | `subworkflows/viral_profiling.nf`; `--run_viral_profiling` / legacy `--run_baqlava` |
+| BAQLaVa viral profiling | `subworkflows/viral_profiling.nf`; `--run_viral_profiling` |
 | MetaPhlAn version abstraction | `metaphlan_v3` / `metaphlan_v4` / `metaphlan_4.0.6_fixed` CLI flag styles |
 | HUMAnN 3/4 compatibility | `--utility-database` conditional; v37 vs v4a output renaming |
 | Version logging | `modules/utils/version_log/main.nf` → `results/pipeline_info/versions.txt` + `db_paths.txt` |
@@ -199,7 +199,6 @@ run_qc:                   true    # KneadData host decontamination + trimming
 run_taxonomic_profiling:  true    # MetaPhlAn
 run_functional_profiling: true    # HUMAnN (auto-depends on taxonomic profiling output)
 run_viral_profiling:      false   # BAQLaVa (opt-in)
-run_baqlava:              false   # backward-compat alias for run_viral_profiling
 run_strain_profiling:     false   # StrainPhlAn SGB mode (opt-in)
 ```
 
@@ -380,7 +379,7 @@ Available `withName` blocks: `single_end_kneaddata`, `paired_end_kneaddata`, `me
 
 BAQLaVa is implemented in `modules/viral/baqlava/main.nf` and orchestrated by `subworkflows/viral_profiling.nf`. It takes cleaned reads and the MetaPhlAn profile as input and produces a viral taxonomic profile using HUMAnN-based bacterial depletion.
 
-Enable with `--run_viral_profiling true` (or the legacy alias `--run_baqlava true`).
+Enable with `--run_viral_profiling true`.
 
 | Param | Default | Description |
 |---|---|---|

@@ -446,7 +446,6 @@ nextflow run main.nf -profile harvard_rc \
 | `--run_taxonomic_profiling` | `true` | Run MetaPhlAn |
 | `--run_functional_profiling` | `true` | Run HUMAnN |
 | `--run_viral_profiling` | `false` | Run BAQLaVa viral profiling |
-| `--run_baqlava` | `false` | Alias for `--run_viral_profiling` (backward compat) |
 | `--run_strain_profiling` | `false` | Run StrainPhlAn SGB mode |
 
 ### QC options (KneadData)

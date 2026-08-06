@@ -33,6 +33,7 @@ process humann {
         --protein-database ${params.humann_db}/uniref \\
         $utility_db \\
         --threads ${task.cpus} \\
+        --output-basename ${sample} \\
         $bypass_prescreen \\
         $bypass_nucleotide
 

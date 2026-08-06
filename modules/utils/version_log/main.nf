@@ -78,7 +78,7 @@ process version_log {
         echo "  run_humann_rename:                 ${params.run_humann_rename}"
         echo "  run_humann_merge:                  ${params.run_humann_merge}"
         echo ""
-        echo "run_viral_profiling:         ${params.run_viral_profiling || params.run_baqlava}"
+        echo "run_viral_profiling:         ${params.run_viral_profiling}"
         echo "  baqlava_bypass_depletion:          ${params.baqlava_bypass_depletion}"
         echo ""
         echo "run_strain_profiling:        ${params.run_strain_profiling}"

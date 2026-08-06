@@ -14,7 +14,7 @@ process baqlava {
     tuple val(sample), path("${sample}_baqlava/"), emit: results
 
     when:
-    params.run_viral_profiling || params.run_baqlava
+    params.run_viral_profiling
 
     script:
     // Use taxonomic profile for bacterial depletion, or bypass for test/tiny samples with 0 detected species

@@ -45,10 +45,10 @@ workflow MGX {
     }
 
     // ── Viral profiling (BAQLaVa) ──────────────────────────────────────────
-    if ((params.run_viral_profiling || params.run_baqlava) && params.run_taxonomic_profiling) {
+    if (params.run_viral_profiling && params.run_taxonomic_profiling) {
         VIRAL_PROFILING(cleaned, TAXONOMIC_PROFILING.out.profile)
-    } else if (params.run_viral_profiling || params.run_baqlava) {
-        error "ERROR: run_baqlava/run_viral_profiling requires run_taxonomic_profiling = true (MetaPhlAn profile needed by BAQLaVa)"
+    } else if (params.run_viral_profiling) {
+        error "ERROR: run_viral_profiling requires run_taxonomic_profiling = true (MetaPhlAn profile needed by BAQLaVa)"
     }
 
     // ── Strain profiling (StrainPhlAn) ────────────────────────────────────

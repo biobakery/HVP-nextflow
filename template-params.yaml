@@ -101,6 +101,6 @@ humann_db: "/volume/biobakery_databases/humann"
 # #            humann_db: "/n/huttenhower_lab/tools/nextflow/databases/humann4"
 # #            (also update beforeScript in nextflow.config to load rocky8/humann4/4.0-alpha-1)
 
-# run_baqlava:              false          # true to enable BAQLaVa viral profiling
+# run_viral_profiling:      false          # true to enable BAQLaVa viral profiling
 # baqlava_bypass_depletion: false          # true only for test/tiny samples (0 prescreen species)
 
