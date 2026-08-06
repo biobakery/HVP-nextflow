@@ -37,7 +37,7 @@ Select a workflow with `--workflow`:
 | `--workflow` | Status | Description |
 |---|---|---|
 | `mgx` *(default)* | ✅ Ready | Whole metagenome shotgun: QC + taxonomy + function |
-| `assembly` | ✅ Ready | MAG assembly → binning → SGB clustering (ported from anadama2 `feature/assembly`) |
+| `assembly` | ✅ Ready | MAG assembly → binning → SGB clustering (matches `biobakery_workflows assembly`, v3.2) |
 | `mgx_mtx` | 🚧 Partial | Paired MGX + MTX (runs MGX half) |
 | `mtx` | 🔜 Stub | Metatranscriptome |
 | `16s` | 🔜 Stub | 16S amplicon (DADA2 / QIIME2 planned) |
@@ -53,7 +53,7 @@ Select a workflow with `--workflow`:
 | [KneadData](https://github.com/biobakery/kneaddata) | Host decontamination + QC trimming | 0.12+ |
 | [MetaPhlAn](https://github.com/biobakery/MetaPhlAn) | Species-level taxonomic profiling | v3.1, v4.0.6, v4.1.1 |
 | [HUMAnN](https://github.com/biobakery/humann) | Functional pathway profiling | 3.7, 4.0-alpha |
-| [BAQLaVa](https://github.com/biobakery/baqlava) | Viral profiling | 0.5+ |
+| [BAQLaVa](https://github.com/biobakery/baqlava) | Viral profiling | 1.2 (`rocky8/baqlava/1.2.0-devel`) |
 | [StrainPhlAn](https://github.com/biobakery/MetaPhlAn) | Strain-level profiling (SGB mode) | bundled with MetaPhlAn 4 |
 | [MEGAHIT](https://github.com/voutcn/megahit) | De novo metagenome assembly | 1.2+ |
 | [MetaBAT2](https://bitbucket.org/berkeleylab/metabat) | MAG binning | 2.15+ |
@@ -330,7 +330,7 @@ nextflow run main.nf -profile harvard_rc \
 
 ---
 
-### 7. SGB pipeline (MAG assembly → binning → SGB clustering)
+### 7. Assembly (MAG assembly → binning → SGB clustering)
 
 Requires MEGAHIT, MetaBAT2, CheckM2, PhyloPhlAn, Mash, and the PhyloPhlAn database.
 
