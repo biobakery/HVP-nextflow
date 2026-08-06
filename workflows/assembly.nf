@@ -43,13 +43,24 @@ workflow ASSEMBLY {
     }
 
     // ── Step 1: Host decontamination (KneadData) ──────────────────────────
-    QUALITY_CONTROL(reads)
-    cleaned = QUALITY_CONTROL.out.reads
-
-    cleaned_flat = cleaned.map { meta, r -> tuple(meta.id, r) }
+    // KneadData carries a "when: params.run_qc" guard, so with --run_qc false the
+    // QC processes never run and its channels stay empty. Inputs are then already
+    // cleaned, so use them directly rather than waiting on an empty channel.
+    if (params.run_qc) {
+        QUALITY_CONTROL(reads)
+        // concatenated reads: used for alignment and depth
+        cleaned_flat = QUALITY_CONTROL.out.reads.map { meta, r -> tuple(meta.id, r) }
+        // MEGAHIT gets the pairing rather than the concatenated file, so it can
+        // assemble in paired mode the way the anadama2 assembly workflow does
+        assembly_input = params.paired_end ? QUALITY_CONTROL.out.paired_reads
+                                           : cleaned_flat
+    } else {
+        cleaned_flat   = reads.map { meta, r -> tuple(meta.id, r) }
+        assembly_input = cleaned_flat
+    }
 
     // ── Step 2: De novo assembly (MEGAHIT) ────────────────────────────────
-    contigs_out = megahit(cleaned_flat)
+    contigs_out = megahit(assembly_input)
 
     // ── Step 3: Align reads to contigs + contig depth ─────────────────────
     contigs_with_reads = contigs_out.contigs.join(cleaned_flat)

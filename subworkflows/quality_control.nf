@@ -30,9 +30,21 @@ workflow QUALITY_CONTROL {
     all_cleaned = cleaned_paired.mix(cleaned_single)
     all_logs    = paired_out.log.mix(single_out.log)
 
+    // The four separate KneadData outputs, for consumers that need the pairing
+    // rather than the concatenated file: assembly runs MEGAHIT in paired mode
+    // (-1/-2 plus the unmatched reads as single-end), matching the anadama2
+    // assembly workflow.
+    paired_parts = paired_out.paired1
+        .join(paired_out.paired2)
+        .join(paired_out.unpaired1)
+        .join(paired_out.unpaired2)
+        .map { sample, p1, p2, u1, u2 -> tuple(sample, [p1, p2, u1, u2]) }
+
     emit:
     reads = all_cleaned  // Channel: [ [id, paired_end], cleaned_reads ]
     // named "logs", not "log": Nextflow already binds "log" to its own logger,
     // so emitting that name fails at runtime with "No such variable: log"
     logs  = all_logs
+    // Channel: [ sample, [paired_1, paired_2, unmatched_1, unmatched_2] ]
+    paired_reads = paired_parts
 }
