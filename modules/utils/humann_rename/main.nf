@@ -21,17 +21,16 @@ process humann_rename {
     // {kegg-orthology, ec, metacyc-rxn, metacyc-pwy, pfam, eggnog, go,
     // infogo1000, uniref90}. Passing the regroup value straight through made
     // humann_rename_table exit on "invalid choice", so map it here.
+    // Verified against humann_regroup_table --help (the -g options) and
+    // humann_rename_table --help (the -n options); uniref90_rxn -> metacyc-rxn
+    // confirmed on real output, which renamed 3912/3916 features.
     def rename_names = [
-        'uniref90_rxn'    : 'metacyc-rxn',
-        'uniref90_ko'     : 'kegg-orthology',
-        'uniref90_eggnog' : 'eggnog',
-        'uniref90_pfam'   : 'pfam',
-        'uniref90_go'     : 'go',
-        'uniref50_rxn'    : 'metacyc-rxn',
-        'uniref50_ko'     : 'kegg-orthology',
-        'uniref50_eggnog' : 'eggnog',
-        'uniref50_pfam'   : 'pfam',
-        'uniref50_go'     : 'go',
+        'uniref90_rxn'        : 'metacyc-rxn',
+        'uniref90_go'         : 'go',
+        'uniref90_ko'         : 'kegg-orthology',
+        'uniclust90_level4ec' : 'ec',
+        'uniref90_pfam'       : 'pfam',
+        'uniref90_eggnog'     : 'eggnog',
     ]
     def names = params.humann_rename_names ?:
                 rename_names[params.humann_regroup_grouping] ?:

@@ -62,9 +62,10 @@ process mag_n50 {
 
     script:
     """
+    # -o is a directory: the script writes <dir>/mags_n50.tsv
     python ${projectDir}/bin/scripts/mag_n50_calc.py \\
         -i . \\
-        -o mags_n50.tsv \\
+        -o . \\
         -t ${task.cpus}
     """
 }

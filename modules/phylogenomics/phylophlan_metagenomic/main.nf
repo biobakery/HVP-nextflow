@@ -18,8 +18,15 @@ process phylophlan_metagenomic {
     def extra     = params.phylophlan_metagenomic_options ?: ""
     """
     if ls ${bins_dir}/*.bin.[0-9]*.fa 2>/dev/null | grep -q .; then
+        # Stage only the numbered bins, as the anadama2 workflow's copy_bins step
+        # does. MetaBAT also emits empty lowDepth/tooShort/unbinned placeholders,
+        # and mash cannot sketch a zero-byte file: phylophlan reports
+        # "error while sketching ... expected str, bytes or os.PathLike object,
+        # not NoneType" and exits.
+        mkdir -p numbered_bins
+        cp ${bins_dir}/*.bin.[0-9]*.fa numbered_bins/
         phylophlan_assign_sgbs_legacy \\
-            -i ${bins_dir} \\
+            -i numbered_bins \\
             -n 1 \\
             --add_ggb --add_fgb \\
             -d ${db} \\
