@@ -12,7 +12,7 @@
 
 | Component | Details |
 |---|---|
-| Multi-workflow router | `main.nf` routes via `--workflow mgx\|mtx\|mgx_mtx\|16s\|vis\|stats\|sgb_pipeline` |
+| Multi-workflow router | `main.nf` routes via `--workflow mgx\|mtx\|mgx_mtx\|16s\|vis\|stats\|assembly` |
 | nf-core-style module layout | `modules/` → `subworkflows/` → `workflows/` layering |
 | MGX workflow | KneadData → MetaPhlAn → HUMAnN → regroup/rename/merge → BAQLaVa (opt) → StrainPhlAn (opt) |
 | SGB pipeline workflow | KneadData → MEGAHIT → Bowtie2+depth → MetaBAT2 → CheckM2 → PhyloPhlAn → Mash → SGB clustering |
@@ -45,7 +45,7 @@ biobakery-nextflow/
 │
 ├── workflows/                           # Top-level workflow entry points
 │   ├── mgx.nf                           # Whole metagenome shotgun ✅
-│   ├── sgb_pipeline.nf                  # MAG assembly → SGB clustering ✅
+│   ├── assembly.nf                  # MAG assembly → SGB clustering ✅
 │   ├── mgx_mtx.nf                       # MGX + MTX joint (MGX arm complete) 🚧
 │   ├── mtx.nf                           # Metatranscriptome 🔜
 │   ├── sixteens.nf                      # 16S amplicon 🔜
@@ -66,7 +66,7 @@ biobakery-nextflow/
 │   ├── strainphlan/main.nf              # sample2markers, strainphlan
 │   ├── viral/
 │   │   └── baqlava/main.nf              # baqlava
-│   ├── sgb_pipeline/
+│   ├── assembly/
 │   │   └── megahit/main.nf              # megahit de novo assembly
 │   ├── binning/
 │   │   └── metabat2/main.nf             # metabat2
@@ -108,7 +108,7 @@ biobakery-nextflow/
 │   └── diagrams/                        # draw.io source files
 │       ├── architecture_overview.drawio
 │       ├── mgx_workflow.drawio
-│       ├── sgb_pipeline.drawio
+│       ├── assembly.drawio
 │       ├── mtx_workflow.drawio
 │       ├── mgx_mtx_workflow.drawio
 │       └── sixteens_workflow.drawio
@@ -434,7 +434,7 @@ nextflow run main.nf -profile harvard_rc \
 # Nextflow (Harvard FASRC)
 nextflow run main.nf \
   -profile harvard_rc \
-  --workflow sgb_pipeline \
+  --workflow assembly \
   --readsdir samples/ \
   --outdir results/ \
   --sgb_completeness 50 \
@@ -502,7 +502,7 @@ These are auto-applied when using `-profile harvard_rc`. Override any on the CLI
 | `--metaphlan_index` | `mpa_vJun23_CHOCOPhlAnSGB_202307` |
 | `--humann_db` (v3.9) | `/n/huttenhower_lab/tools/nextflow/databases/humann3` |
 | `--humann_db` (v4a) | `/n/huttenhower_lab/tools/nextflow/databases/humann4` |
-| `--phylophlan_path` | Set manually if running `--workflow sgb_pipeline` |
+| `--phylophlan_path` | Set manually if running `--workflow assembly` |
 
 ### Cluster-side files (not in repo)
 

@@ -18,7 +18,7 @@ process phylophlan_metagenomic {
     def extra     = params.phylophlan_metagenomic_options ?: ""
     """
     if ls ${bins_dir}/*.bin.[0-9]*.fa 2>/dev/null | grep -q .; then
-        phylophlan_metagenomic \\
+        phylophlan_assign_sgbs_legacy \\
             -i ${bins_dir} \\
             -n 1 \\
             --add_ggb --add_fgb \\

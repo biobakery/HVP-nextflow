@@ -2,7 +2,7 @@
 nextflow.enable.dsl=2
 
 include { QUALITY_CONTROL }        from '../subworkflows/quality_control.nf'
-include { megahit }                from '../modules/sgb_pipeline/megahit/main.nf'
+include { megahit }                from '../modules/assembly/megahit/main.nf'
 include { align_and_depth }        from '../modules/utils/align_and_depth/main.nf'
 include { metabat2 }               from '../modules/binning/metabat2/main.nf'
 include { checkm2 }                from '../modules/qc/checkm2/main.nf'
@@ -20,14 +20,14 @@ include { merge_tax_abundance }    from '../modules/utils/mash/main.nf'
 include { version_log }            from '../modules/utils/version_log/main.nf'
 
 // Full MAG assembly → binning → SGB clustering pipeline.
-// Ported from anadama2 biobakery-workflows feature/sgb_pipeline branch.
-workflow SGB_PIPELINE {
+// Ported from anadama2 biobakery-workflows feature/assembly branch.
+workflow ASSEMBLY {
 
     main:
 
     // ── Build input channel ───────────────────────────────────────────────
     if (!params.readsdir) {
-        error "ERROR: --readsdir is required for sgb_pipeline workflow"
+        error "ERROR: --readsdir is required for assembly workflow"
     }
     if (params.paired_end) {
         reads = Channel

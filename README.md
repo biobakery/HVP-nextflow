@@ -37,7 +37,7 @@ Select a workflow with `--workflow`:
 | `--workflow` | Status | Description |
 |---|---|---|
 | `mgx` *(default)* | ✅ Ready | Whole metagenome shotgun: QC + taxonomy + function |
-| `sgb_pipeline` | ✅ Ready | MAG assembly → binning → SGB clustering (ported from anadama2 `feature/sgb_pipeline`) |
+| `assembly` | ✅ Ready | MAG assembly → binning → SGB clustering (ported from anadama2 `feature/assembly`) |
 | `mgx_mtx` | 🚧 Partial | Paired MGX + MTX (runs MGX half) |
 | `mtx` | 🔜 Stub | Metatranscriptome |
 | `16s` | 🔜 Stub | 16S amplicon (DADA2 / QIIME2 planned) |
@@ -336,7 +336,7 @@ Requires MEGAHIT, MetaBAT2, CheckM2, PhyloPhlAn, Mash, and the PhyloPhlAn databa
 
 ```sh
 nextflow run main.nf -profile harvard_rc \
-  --workflow      sgb_pipeline \
+  --workflow      assembly \
   --readsdir      /path/to/kneaddata_output \
   --outdir        results \
   --run_qc        false \
@@ -432,7 +432,7 @@ nextflow run main.nf -profile harvard_rc \
 
 | Parameter | Default | Description |
 |---|---|---|
-| `--workflow` | `mgx` | Workflow: `mgx \| mtx \| mgx_mtx \| 16s \| vis \| stats \| sgb_pipeline` |
+| `--workflow` | `mgx` | Workflow: `mgx \| mtx \| mgx_mtx \| 16s \| vis \| stats \| assembly` |
 | `--readsdir` | *required* | Directory containing input FASTQ files |
 | `--outdir` | `results` | Output directory |
 | `--paired_end` | `true` | `true` for paired-end, `false` for single-end |
@@ -502,7 +502,7 @@ nextflow run main.nf -profile harvard_rc \
 
 | Parameter | Default | Description |
 |---|---|---|
-| `--phylophlan_path` | `null` | **Required for `sgb_pipeline`**. Path to PhyloPhlAn database directory. |
+| `--phylophlan_path` | `null` | **Required for `assembly`**. Path to PhyloPhlAn database directory. |
 | `--megahit_min_contig_length` | `2500` | Minimum contig length for MEGAHIT and MetaBAT2 `-m` |
 | `--megahit_options` | `''` | Extra MEGAHIT flags as a quoted string |
 | `--metabat_options` | `''` | Extra MetaBAT2 flags |
@@ -668,7 +668,7 @@ results/
 │           ├── *.tre                              # phylogenetic tree
 │           └── *.tsv                             # marker table
 │
-└── [sgb_pipeline workflow outputs]
+└── [assembly workflow outputs]
     ├── assembly/main/${SAMPLE}/${SAMPLE}.final.contigs.fa
     ├── assembly/contig_depths/${SAMPLE}.contig_depths.txt
     ├── bins/${SAMPLE}/bins/*.bin.*.fa
@@ -716,10 +716,10 @@ CI runs automatically on every push via `.github/workflows/ci-tests.yml`.
 
 ```
 biobakery-nextflow/
-├── main.nf                              # Router: --workflow mgx|sgb_pipeline|...
+├── main.nf                              # Router: --workflow mgx|assembly|...
 ├── workflows/
 │   ├── mgx.nf                           # MGX: QC → taxonomy → function (+ viral/strain optional)
-│   ├── sgb_pipeline.nf                  # MAG assembly → binning → SGB clustering
+│   ├── assembly.nf                  # MAG assembly → binning → SGB clustering
 │   ├── mtx.nf                           # MTX stub
 │   ├── mgx_mtx.nf                       # MGX+MTX stub
 │   ├── sixteens.nf                      # 16S stub
@@ -737,7 +737,7 @@ biobakery-nextflow/
 │   ├── humann/main.nf
 │   ├── strainphlan/main.nf              # sample2markers + strainphlan
 │   ├── viral/baqlava/main.nf
-│   ├── sgb_pipeline/megahit/main.nf     # MEGAHIT assembly
+│   ├── assembly/megahit/main.nf     # MEGAHIT assembly
 │   ├── binning/metabat2/main.nf
 │   ├── qc/checkm2/main.nf               # checkm2 + merge + n50 + wrangling
 │   ├── phylogenomics/phylophlan_metagenomic/main.nf

@@ -61,7 +61,7 @@
 ###
 ###   Select workflow (default: mgx):
 ###     add --workflow <name>
-###     Available: mgx | mtx | mgx_mtx | 16s | vis | stats | sgb_pipeline
+###     Available: mgx | mtx | mgx_mtx | 16s | vis | stats | assembly
 ###
 ###   With BAQLaVa viral profiling:
 ###     add --run_baqlava true
@@ -122,7 +122,7 @@ human_genome: "/n/huttenhower_lab/data/kneaddata_databases/hg38"
 #     /n/huttenhower_lab/tools/metaphlan4/rocky8/v4.0.6_vOct_fixed/lib/python3.10/site-packages/metaphlan/metaphlan_databases
 #   mpa_vJun23_CHOCOPhlAnSGB_202307 (use with HUMAnN 3.9 / BAQLaVa 0.5.0 only — NOT compatible with BAQLaVa 1.2.0):
 #     /n/huttenhower_lab/tools/metaphlan4/rocky8/v4.1.1/lib/python3.10/site-packages/metaphlan/metaphlan_databases
-metaphlan_version: "metaphlan_v3"
+metaphlan_version: "metaphlan_4.0.6_fixed"
 metaphlan_db:      "/n/huttenhower_lab/tools/metaphlan4/rocky8/v4.0.6_vOct_fixed/lib/python3.10/site-packages/metaphlan/metaphlan_databases"
 metaphlan_index:   "mpa_vOct22_CHOCOPhlAnSGB_202403"
 

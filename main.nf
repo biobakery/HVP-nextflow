@@ -8,13 +8,13 @@ include { MGX_MTX }      from './workflows/mgx_mtx.nf'
 include { SIXTEENS }     from './workflows/sixteens.nf'
 include { VIS }          from './workflows/vis.nf'
 include { STATS }        from './workflows/stats.nf'
-include { SGB_PIPELINE } from './workflows/sgb_pipeline.nf'
+include { ASSEMBLY } from './workflows/assembly.nf'
 
 // ── Router ─────────────────────────────────────────────────────────────────
 workflow {
 
     // Validate required params for read-based workflows
-    if (!params.readsdir && params.workflow in ['mgx', 'mtx', 'mgx_mtx', '16s', 'sgb_pipeline']) {
+    if (!params.readsdir && params.workflow in ['mgx', 'mtx', 'mgx_mtx', '16s', 'assembly']) {
         error "ERROR: --readsdir is required. Example: --readsdir /path/to/fastqs"
     }
 
@@ -44,11 +44,11 @@ workflow {
             STATS()
             break
 
-        case 'sgb_pipeline':
-            SGB_PIPELINE()
+        case 'assembly':
+            ASSEMBLY()
             break
 
         default:
-            error "Unknown workflow '${params.workflow}'. Choose: mgx | mtx | mgx_mtx | 16s | vis | stats | sgb_pipeline"
+            error "Unknown workflow '${params.workflow}'. Choose: mgx | mtx | mgx_mtx | 16s | vis | stats | assembly"
     }
 }
