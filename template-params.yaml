@@ -38,7 +38,6 @@ humann_db: "/volume/biobakery_databases/humann"
 # humann_db: "/Users/pintorson/Documents/tufts_bonham/biobakery_databases/humann"
 
 
-
 # Tufts HPC params
 # readsdir: "cshared/sequencing/bam"
 # outdir: "/cluster/tufts/bonhamlab/shared/sequencing/processed"
