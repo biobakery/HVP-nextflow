@@ -16,3 +16,6 @@ test/tutorial_output/**/*.sam.bz2
 test/tutorial_output/kneaddata/*.fastq.gz
 test/tutorial_output/metaphlan/mpa_vOct22_CHOCOPhlAnSGB_202403/
 test/tutorial_output/**/.anadama/
+# python bytecode from the bin/scripts helpers
+__pycache__/
+*.pyc

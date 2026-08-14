@@ -37,11 +37,11 @@ workflow {
             break
 
         case 'vis':
-            VIS()
+            VIS(Channel.of(true))
             break
 
         case 'stats':
-            STATS()
+            STATS(Channel.of(true))
             break
 
         case 'assembly':

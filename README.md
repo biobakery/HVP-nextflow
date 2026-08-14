@@ -41,8 +41,15 @@ Select a workflow with `--workflow`:
 | `mgx_mtx` | 🚧 Partial | Paired MGX + MTX (runs MGX half) |
 | `mtx` | 🔜 Stub | Metatranscriptome |
 | `16s` | 🔜 Stub | 16S amplicon (DADA2 / QIIME2 planned) |
-| `vis` | 🔜 Stub | Quarto report generation |
-| `stats` | 🔜 Stub | MaAsLin2 / LEfSe / diversity |
+| `vis` | ✅ Ready *(standalone)* | Visualization report — QC, taxonomy, ordination, heatmaps, pathways/ECs (matches `biobakery_workflows vis`, v3.2) |
+| `stats` | ✅ Ready *(standalone)* | Statistics — feature tables, mantel, MaAsLin2, HAllA, stratified pathways, beta diversity / PERMANOVA (matches `biobakery_workflows stats`, v3.2) |
+
+`vis` and `stats` take a **folder** of bioBakery output rather than channels, exactly
+as their AnADAMA counterparts do, so they run standalone against the output of any
+bioBakery run. Chaining them automatically onto the end of `mgx` is **not yet wired**
+— `--run_vis` / `--run_stats` exist but only apply once that lands. See
+[docs/vis_stats_port_status.md](docs/vis_stats_port_status.md) for the full port
+status, the upstream defects worked around, and the remaining work.
 
 ---
 
@@ -60,6 +67,9 @@ Select a workflow with `--workflow`:
 | [CheckM2](https://github.com/chklovski/CheckM2) | MAG quality assessment | 1.0+ |
 | [PhyloPhlAn](https://github.com/biobakery/phylophlan) | Phylogenetic MAG placement | 3.0+ |
 | [Mash](https://github.com/marbl/Mash) | Pairwise genome distance (SGB clustering) | 2.0+ |
+| [MaAsLin2](https://github.com/biobakery/Maaslin2) | Multivariable association testing (`stats`) | 1.22 |
+| [HAllA](https://github.com/biobakery/halla) | Hierarchical all-against-all association (`stats`) | 0.8.20 (`rocky8/halla/0.8.20`) |
+| [vegan](https://cran.r-project.org/package=vegan) | Alpha / beta diversity, PERMANOVA (`vis`, `stats`) | 2.7+ |
 
 ---
 
@@ -424,6 +434,52 @@ nextflow run main.nf -profile harvard_rc \
   --baqlava_bypass_depletion true
 ```
 
+### 12. Visualization report (`vis`)
+
+Point it at a folder of bioBakery output — it discovers the taxonomic profile, QC
+and HUMAnN read counts, pathway and EC tables by name and by content, the same way
+`biobakery_workflows vis` does. Metadata is optional; without it the alpha diversity
+plots and metadata-stratified figures are skipped.
+
+```sh
+nextflow run main.nf -profile harvard_rc --workflow vis \
+  --vis_input       /path/to/biobakery_output \
+  --input_metadata  /path/to/metadata.tsv \
+  --outdir          results \
+  --project_name    "My study"
+```
+
+Produces `results/vis/mgx_report.html` (figures, data and alpha diversity plots
+alongside it) and `results/vis.zip`. All links in the report are relative, so the
+folder can be moved or shared as a unit.
+
+### 13. Statistics (`stats`)
+
+Metadata is **required**. `--stats_fixed_effects` names the metadata variables to
+test.
+
+```sh
+nextflow run main.nf -profile harvard_rc --workflow stats \
+  --stats_input         /path/to/biobakery_output \
+  --input_metadata      /path/to/metadata.tsv \
+  --outdir              results \
+  --project_name        "My study" \
+  --stats_fixed_effects 'diagnosis,age'
+```
+
+Produces `results/stats/stats_report.html` and `results/stats.zip`, plus the
+per-analysis folders (`features/`, `maaslin2_*/`, `halla_*/`, `mantel_test/`,
+`beta_diversity/`, `stratified_pathways/`).
+
+Setting `--stats_random_effects` marks the study longitudinal, which runs a PERMANOVA
+in place of beta diversity and additionally requires `--stats_static_covariates`.
+Skip the expensive stages with `--stats_bypass_maaslin` / `--stats_bypass_halla`.
+
+> **HAllA needs its own module.** It pins `numpy<2`, while the report rendering needs
+> numpy 2, so the two cannot share an environment. On `harvard_rc` this is already
+> handled — the `halla` process loads `rocky8/halla/0.8.20` via its own `beforeScript`.
+> On other profiles, give that process an environment with HAllA and numpy 1.x.
+
 ---
 
 ## All Parameters
@@ -447,6 +503,8 @@ nextflow run main.nf -profile harvard_rc \
 | `--run_functional_profiling` | `true` | Run HUMAnN |
 | `--run_viral_profiling` | `false` | Run BAQLaVa viral profiling |
 | `--run_strain_profiling` | `false` | Run StrainPhlAn SGB mode |
+| `--run_vis` | `true` | Run `vis` at the end of a read-based workflow. **Reserved — chaining is not wired yet**; use `--workflow vis`. |
+| `--run_stats` | `true` | Run `stats` at the end of a read-based workflow. **Reserved — chaining is not wired yet**; use `--workflow stats`. |
 
 ### QC options (KneadData)
 
@@ -513,6 +571,58 @@ nextflow run main.nf -profile harvard_rc \
 | `--sgb_contamination` | `10` | Maximum MAG contamination % for SGB inclusion |
 | `--sgb_abundance_type` | `by_sample` | Abundance estimation: `by_sample \| by_dataset` |
 | `--sgb_gc_length_stats` | `false` | Calculate GC content and length statistics per bin |
+
+### Report options (shared by `vis` and `stats`)
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--input_metadata` | `null` | Metadata TSV. Required for `stats`, optional for `vis`. |
+| `--input_file_type` | `null` | Extra file-type hints, semicolon-delimited `filename,filetype` pairs |
+| `--report_format` | `html` | `html \| pdf`. AnADAMA defaults to pdf; html avoids needing pdflatex at render time. |
+| `--project_name` | `''` | Project name shown in the report header |
+| `--author_name` | `''` | Author name shown in the report header |
+| `--header_image` | `''` | Image to place in the report header |
+| `--introduction_text` | `''` | Override the generated introduction |
+| `--use_template` | `null` | Render an alternative report template |
+| `--metadata_categorical` | `''` | Comma-delimited metadata to treat as categorical |
+| `--metadata_continuous` | `''` | Comma-delimited metadata to treat as continuous |
+| `--metadata_exclude` | `''` | Comma-delimited metadata to ignore |
+| `--max_missing` | `20.0` | Max % of samples a metadata variable may be missing in |
+
+### Visualization options (`vis`)
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--vis_input` | `null` | Folder of bioBakery output to visualize (defaults to `--outdir` when chained) |
+| `--vis_min_abundance` | `0.01` | Minimum abundance for a feature to be included |
+| `--vis_min_samples` | `3` | Minimum % of samples a feature must appear in |
+| `--vis_max_sets_heatmap` | `25` | Max features shown in a heatmap |
+| `--vis_max_sets_barplot` | `15` | Max features shown in a barplot |
+| `--vis_max_groups_barplot` | `5` | Max metadata groups shown in a barplot |
+| `--vis_correlation_threshold` | `0.7` | Spearman threshold for filtering heatmap features |
+| `--input_picard` | `null` | Folder of Picard quality metrics to include |
+| `--input_picard_extension` | `quality_by_cycle_metrics` | Extension identifying the Picard files |
+
+### Statistics options (`stats`)
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--stats_input` | `null` | Folder of bioBakery output to analyse (defaults to `--outdir` when chained) |
+| `--stats_fixed_effects` | `''` | Comma-delimited metadata variables to test |
+| `--stats_multivariable_fixed_effects` | `''` | Variables forced into the multivariable model |
+| `--stats_random_effects` | `''` | Setting this marks the study longitudinal: runs PERMANOVA instead of beta diversity, and requires `--stats_static_covariates` |
+| `--stats_static_covariates` | `''` | Covariates constant within a subject (required with random effects) |
+| `--stats_transform` | `''` | MaAsLin2 transform |
+| `--stats_adonis_method` | `bray` | Distance method for adonis |
+| `--stats_min_abundance` | `0.0001` | Minimum abundance for a feature |
+| `--stats_min_prevalence` | `0.1` | Minimum fraction of samples a feature must appear in |
+| `--stats_permutations` | `4999` | Permutations for the mantel test and PERMANOVA |
+| `--stats_scale` | `100` | PERMANOVA scale |
+| `--stats_top_pathways` | `3` | Number of stratified pathways to plot per variable |
+| `--stats_bypass_maaslin` | `false` | Skip MaAsLin2 (and the stratified pathway barplots) |
+| `--stats_bypass_halla` | `false` | Skip HAllA |
+| `--maaslin_options` | `''` | Extra arguments passed to `Maaslin2()` |
+| `--halla_options` | `''` | Extra `halla` flags |
 
 ### Resources & logging
 
@@ -667,6 +777,25 @@ results/
 │           ├── *.tre                              # phylogenetic tree
 │           └── *.tsv                             # marker table
 │
+├── vis/                                           # (--workflow vis)
+│   ├── mgx_report.html                            # or .pdf; all links relative
+│   ├── figures/
+│   ├── data/
+│   └── alpha_diversity_plots/                     # (requires --input_metadata)
+├── vis.zip                                        # the vis/ folder, archived
+│
+├── stats/                                         # (--workflow stats)
+│   ├── stats_report.html                          # or .pdf; all links relative
+│   ├── features/${TYPE}_features.txt              # taxonomy, pathways, ec
+│   ├── maaslin2_${TYPE}/                          # taxa, pathways, ec
+│   ├── halla_${TYPE}/
+│   ├── mantel_test/mantel_plot.png
+│   ├── beta_diversity/${TYPE}_{univariate,multivariate,pairwise}.png
+│   ├── permanova/                                 # (--stats_random_effects set)
+│   ├── stratified_pathways/
+│   └── data/
+├── stats.zip                                      # the stats/ folder, archived
+│
 └── [assembly workflow outputs]
     ├── assembly/main/${SAMPLE}/${SAMPLE}.final.contigs.fa
     ├── assembly/contig_depths/${SAMPLE}.contig_depths.txt
@@ -722,8 +851,8 @@ biobakery-nextflow/
 │   ├── mtx.nf                           # MTX stub
 │   ├── mgx_mtx.nf                       # MGX+MTX stub
 │   ├── sixteens.nf                      # 16S stub
-│   ├── vis.nf                           # Visualization stub
-│   └── stats.nf                         # Statistics stub
+│   ├── vis.nf                           # Visualization report
+│   └── stats.nf                         # Statistics
 ├── subworkflows/
 │   ├── quality_control.nf               # KneadData (single + paired routing)
 │   ├── taxonomic_profiling.nf           # MetaPhlAn + bzip + merge
@@ -740,8 +869,13 @@ biobakery-nextflow/
 │   ├── binning/metabat2/main.nf
 │   ├── qc/checkm2/main.nf               # checkm2 + merge + n50 + wrangling
 │   ├── phylogenomics/phylophlan_metagenomic/main.nf
+│   ├── vis/                             # identify_inputs, alpha_diversity, add_ec_names, report
+│   ├── stats/                           # feature_table, maaslin2, halla, mantel,
+│   │                                    #   beta_diversity, covariate_equation,
+│   │                                    #   stratified_pathways, report
 │   └── utils/
 │       ├── align_and_depth/main.nf      # Bowtie2 + jgi_summarize_bam_contig_depths
+│       ├── archive/main.nf              # zip an output folder (ports workflow.add_archive)
 │       ├── humann_merge/main.nf
 │       ├── humann_regroup/main.nf
 │       ├── humann_rename/main.nf
@@ -763,12 +897,26 @@ biobakery-nextflow/
 │   │   ├── mag_n50_calc.py
 │   │   ├── mash_list_inputs.py
 │   │   ├── phylophlan_add_tax_assignment.py
+│   │   ├── biobakery_bootstrap.py       # puts the vendored layer on sys.path/PYTHONPATH
+│   │   ├── biobakery_identify_inputs.py # input discovery → JSON manifest
+│   │   ├── biobakery_vis_report.py      # vis report driver
+│   │   ├── biobakery_stats_report.py    # stats report driver
 │   │   └── ...
+│   ├── lib/                             # vendored so the pipeline needs no anadama2
+│   │   ├── biobakery_document.py        # anadama2 document.py (also the plotting library)
+│   │   ├── biobakery_log.py
+│   │   ├── anadama2_fallback/           # import stand-in for `import anadama2`
+│   │   └── LICENSE-anadama2             # MIT
 │   └── Rscripts/
 │       ├── mash_clusters.R
 │       └── merge_tax_and_abundance.R
 ├── assets/
 │   ├── diagrams/                        # draw.io source files
-│   └── templates/                       # Quarto report templates (planned)
+│   ├── document_templates/              # vendored .pmd report templates
+│   └── Rscripts/                        # only R scripts patched for the current R stack;
+│                                        #   these shadow the biobakery_workflows copies
+├── docs/
+│   ├── architecture.md
+│   └── vis_stats_port_status.md         # vis/stats port status and known divergences
 └── test/                                # Test FASTQ files + expected outputs
 ```
