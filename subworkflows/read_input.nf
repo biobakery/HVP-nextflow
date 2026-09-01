@@ -40,6 +40,18 @@ def read_input(indir, label) {
     def paired_glob = params.filepattern ?: params.filepattern_paired
     def single_glob = params.filepattern ?: params.filepattern_single
 
+    // ...except that a pair-identifier alternation like "*_R{1,2}*.fastq.gz"
+    // cannot match anything in single-end mode. conf/harvard_rc.yaml ships
+    // exactly such a filepattern, so `--single_end true` with the default
+    // params file would otherwise fail with "No files match pattern".
+    // Fall back to the single-end default and say so.
+    if (force_single && single_glob.contains('{')) {
+        log.warn "[${label}] --filepattern '${single_glob}' carries a pair identifier, " +
+                 "which cannot match in single-end mode. Using '${params.filepattern_single}' " +
+                 "instead; set --filepattern to override."
+        single_glob = params.filepattern_single
+    }
+
     // Decide the layout before building any channel, so the warnings are emitted
     // once for the run rather than once per file.
     def pair_files = force_single ? [] : file("${readsdir}/${paired_glob}")
