@@ -2,12 +2,23 @@
 nextflow.enable.dsl=2
 
 // KneadData QC — single-end reads
+//
+// db_args is a pre-formed "--reference-db A --reference-db B ..." string rather
+// than a list: a Groovy List handed to a process `val` input is implicitly
+// converted with Channel.from(), which would fan the databases out into one
+// task per database instead of one task with several databases.
+//
+// subdir places the published output under a per-assay folder ('' for a plain
+// mgx run, 'whole_metatranscriptome_shotgun/' for the mtx half of mgx_mtx), so
+// the two halves of mgx_mtx do not overwrite each other's merged tables.
 process single_end_kneaddata {
     tag "$sample"
-    publishDir "${params.outdir}/kneaddata", mode: 'copy'
+    publishDir path: { "${params.outdir}/${subdir}kneaddata" }, mode: 'copy'
 
     input:
     tuple val(sample), path(reads)
+    val db_args
+    val subdir
 
     output:
     tuple val(sample), path("${sample}_kneaddata.fastq.gz"),      emit: kneads
@@ -25,7 +36,7 @@ process single_end_kneaddata {
     """
     kneaddata \\
         --unpaired $reads \\
-        --reference-db ${params.host_genome} \\
+        $db_args \\
         --output ./ \\
         --threads ${task.cpus} \\
         --output-prefix ${sample}_kneaddata \\
@@ -40,11 +51,13 @@ process single_end_kneaddata {
 // KneadData QC — paired-end reads
 process paired_end_kneaddata {
     tag "$sample"
-    publishDir "${params.outdir}/kneaddata", mode: 'copy',
+    publishDir path: { "${params.outdir}/${subdir}kneaddata" }, mode: 'copy',
         saveAs: { fn -> fn.endsWith('_concatenated.fastq.gz') ? null : fn }
 
     input:
     tuple val(sample), path(reads)
+    val db_args
+    val subdir
 
     output:
     tuple val(sample), path("${sample}_concatenated.fastq.gz"),       emit: kneads
@@ -66,7 +79,7 @@ process paired_end_kneaddata {
     kneaddata \\
         -i1 ${reads[0]} \\
         -i2 ${reads[1]} \\
-        --reference-db ${params.host_genome} \\
+        $db_args \\
         --output ./ \\
         --processes ${task.cpus} \\
         --output-prefix ${sample}_kneaddata \\

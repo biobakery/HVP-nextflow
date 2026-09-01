@@ -9,17 +9,18 @@ include { metaphlan_merge } from '../modules/metaphlan/main.nf'
 workflow TAXONOMIC_PROFILING {
 
     take:
-    reads  // Channel: [ [id: sample, paired_end: bool], reads ]
+    reads   // Channel: [ [id: sample, paired_end: bool], reads ]
+    subdir  // '' or a trailing-slash output subfolder
 
     main:
     reads_flat = reads.map { meta, r -> tuple(meta.id, r) }
 
-    metaphlan_out      = metaphlan(reads_flat)
-    metaphlan_bzip_out = metaphlan_bzip(metaphlan_out.sam)
+    metaphlan_out      = metaphlan(reads_flat, subdir)
+    metaphlan_bzip_out = metaphlan_bzip(metaphlan_out.sam, subdir)
 
     // Collect all per-sample profiles and merge
     profiles_collected = metaphlan_out.profile.map { s, f -> f }.collect()
-    merged_out         = metaphlan_merge(profiles_collected)
+    merged_out         = metaphlan_merge(profiles_collected, subdir)
 
     emit:
     profile  = metaphlan_out.profile       // per-sample: [ sample, profile.tsv ]

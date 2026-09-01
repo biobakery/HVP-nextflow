@@ -8,9 +8,23 @@ include { paired_end_kneaddata } from '../modules/kneaddata/main.nf'
 workflow QUALITY_CONTROL {
 
     take:
-    reads  // Channel: [ [id: sample, paired_end: bool], reads ]
+    reads    // Channel: [ [id: sample, paired_end: bool], reads ]
+    dbs      // List of KneadData reference database paths
+    subdir   // '' or a trailing-slash output subfolder, e.g. 'whole_metatranscriptome_shotgun/'
 
     main:
+    // A metagenome run decontaminates against the host genome only; a
+    // metatranscriptome run additionally removes host mRNA and rRNA, which is
+    // why the database set is a parameter rather than params.host_genome.
+    def db_paths = (dbs instanceof List ? dbs : [dbs]).findAll { it }
+    if (!db_paths) {
+        error "ERROR: no KneadData reference database configured. Set --host_genome " +
+              "(and --host_transcriptome / --rrna_db for metatranscriptome input)."
+    }
+    // Pre-formed argument string: see the note in modules/kneaddata/main.nf on
+    // why a List must not be handed to a process val input.
+    def db_args = db_paths.collect { "--reference-db ${it}" }.join(' ')
+
     // Split channel by library type
     paired_reads = reads
         .filter  { meta, r -> meta.paired_end }
@@ -20,8 +34,8 @@ workflow QUALITY_CONTROL {
         .filter  { meta, r -> !meta.paired_end }
         .map     { meta, r -> tuple(meta.id, r) }
 
-    paired_out = paired_end_kneaddata(paired_reads)
-    single_out = single_end_kneaddata(single_reads)
+    paired_out = paired_end_kneaddata(paired_reads, db_args, subdir)
+    single_out = single_end_kneaddata(single_reads, db_args, subdir)
 
     // Re-attach meta map so downstream subworkflows get consistent channel shape
     cleaned_paired = paired_out.kneads.map { sample, reads -> [ [id: sample, paired_end: true],  reads ] }

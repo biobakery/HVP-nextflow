@@ -1,7 +1,7 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-include { READ_INPUT }           from '../subworkflows/read_input.nf'
+include { read_input }           from '../subworkflows/read_input.nf'
 include { QUALITY_CONTROL }      from '../subworkflows/quality_control.nf'
 include { TAXONOMIC_PROFILING }  from '../subworkflows/taxonomic_profiling.nf'
 include { FUNCTIONAL_PROFILING } from '../subworkflows/functional_profiling.nf'
@@ -15,12 +15,12 @@ workflow MGX {
     main:
     // ── Build input channel ────────────────────────────────────────────────
     // Layout is detected from the filenames; see subworkflows/read_input.nf
-    READ_INPUT()
-    read_ch = READ_INPUT.out.reads
+    read_ch = read_input(params.readsdir, 'mgx')
 
     // ── QC (KneadData) ────────────────────────────────────────────────────
+    // A metagenome run decontaminates against the host genome only.
     if (params.run_qc) {
-        QUALITY_CONTROL(read_ch)
+        QUALITY_CONTROL(read_ch, [params.host_genome], '')
         cleaned = QUALITY_CONTROL.out.reads
     } else {
         cleaned = read_ch
@@ -28,7 +28,7 @@ workflow MGX {
 
     // ── Taxonomic profiling (MetaPhlAn) ───────────────────────────────────
     if (params.run_taxonomic_profiling) {
-        TAXONOMIC_PROFILING(cleaned)
+        TAXONOMIC_PROFILING(cleaned, '')
     }
 
     // Functional, viral and strain profiling all consume MetaPhlAn output, so
@@ -47,7 +47,7 @@ workflow MGX {
 
     // ── Functional profiling (HUMAnN) ─────────────────────────────────────
     if (params.run_functional_profiling) {
-        FUNCTIONAL_PROFILING(cleaned, TAXONOMIC_PROFILING.out.profile)
+        FUNCTIONAL_PROFILING(cleaned, TAXONOMIC_PROFILING.out.profile, '')
     }
 
     // ── Viral profiling (BAQLaVa) ──────────────────────────────────────────

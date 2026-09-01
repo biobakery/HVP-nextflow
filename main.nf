@@ -13,8 +13,11 @@ include { ASSEMBLY } from './workflows/assembly.nf'
 // ── Router ─────────────────────────────────────────────────────────────────
 workflow {
 
-    // Validate required params for read-based workflows
-    if (!params.readsdir && params.workflow in ['mgx', 'mtx', 'mgx_mtx', '16s', 'assembly']) {
+    // Validate required params for read-based workflows. mgx_mtx is the
+    // exception: it takes two input folders instead of one, and validates them
+    // itself, mirroring wmgx_wmtx.py replacing --input with --input-metagenome
+    // and --input-metatranscriptome.
+    if (!params.readsdir && params.workflow in ['mgx', 'mtx', '16s', 'assembly']) {
         error "ERROR: --readsdir is required. Example: --readsdir /path/to/fastqs"
     }
 

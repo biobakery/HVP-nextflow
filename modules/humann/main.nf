@@ -4,11 +4,12 @@ nextflow.enable.dsl=2
 // HUMAnN — functional profiling
 process humann {
     tag "$sample"
-    publishDir "${params.outdir}/humann/${params.humann_version}", mode: 'copy'
+    publishDir path: { "${params.outdir}/${subdir}humann/${params.humann_version}/main" }, mode: 'copy'
 
     input:
     tuple val(sample),  path(catkneads)
     tuple val(sample2), path(profile)
+    val subdir
 
     output:
     tuple val(sample), path("${sample}_genefamilies_${params.humann_version}.tsv"),   emit: genefamilies

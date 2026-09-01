@@ -1,7 +1,7 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-include { READ_INPUT }             from '../subworkflows/read_input.nf'
+include { read_input }             from '../subworkflows/read_input.nf'
 include { QUALITY_CONTROL }        from '../subworkflows/quality_control.nf'
 include { megahit }                from '../modules/assembly/megahit/main.nf'
 include { align_and_depth }        from '../modules/utils/align_and_depth/main.nf'
@@ -29,15 +29,14 @@ workflow ASSEMBLY {
 
     // ── Build input channel ───────────────────────────────────────────────
     // Layout is detected from the filenames; see subworkflows/read_input.nf
-    READ_INPUT()
-    reads = READ_INPUT.out.reads
+    reads = read_input(params.readsdir, 'assembly')
 
     // ── Step 1: Host decontamination (KneadData) ──────────────────────────
     // KneadData carries a "when: params.run_qc" guard, so with --run_qc false the
     // QC processes never run and its channels stay empty. Inputs are then already
     // cleaned, so use them directly rather than waiting on an empty channel.
     if (params.run_qc) {
-        QUALITY_CONTROL(reads)
+        QUALITY_CONTROL(reads, [params.host_genome], '')
         // concatenated reads: used for alignment and depth
         cleaned_flat = QUALITY_CONTROL.out.reads.map { meta, r -> tuple(meta.id, r) }
         // MEGAHIT gets the pairing rather than the concatenated file, so it can

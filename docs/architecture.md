@@ -2,7 +2,7 @@
 
 > **Pipeline version:** 0.0.1  
 > **Nextflow version:** 24.10.4 (requires Java 11+)  
-> **Status:** Active development — MGX and SGB pipeline workflows complete; MTX, 16S, vis, stats pending
+> **Status:** Active development — MGX, MTX, MGX+MTX, SGB pipeline, vis and stats complete; 16S pending
 
 ---
 
@@ -46,8 +46,8 @@ biobakery-nextflow/
 ├── workflows/                           # Top-level workflow entry points
 │   ├── mgx.nf                           # Whole metagenome shotgun ✅
 │   ├── assembly.nf                  # MAG assembly → SGB clustering ✅
-│   ├── mgx_mtx.nf                       # MGX + MTX joint (MGX arm complete) 🚧
-│   ├── mtx.nf                           # Metatranscriptome 🔜
+│   ├── mgx_mtx.nf                       # MGX + MTX joint, RNA/DNA ratio ✅
+│   ├── mtx.nf                           # Metatranscriptome ✅
 │   ├── sixteens.nf                      # 16S amplicon 🔜
 │   ├── vis.nf                           # Quarto report generation 🔜
 │   └── stats.nf                         # Statistical analysis 🔜

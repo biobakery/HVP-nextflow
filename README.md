@@ -38,8 +38,8 @@ Select a workflow with `--workflow`:
 |---|---|---|
 | `mgx` *(default)* | ✅ Ready | Whole metagenome shotgun: QC + taxonomy + function |
 | `assembly` | ✅ Ready | MAG assembly → binning → SGB clustering (matches `biobakery_workflows assembly`, v3.2) |
-| `mgx_mtx` | 🚧 Partial | Paired MGX + MTX (runs MGX half) |
-| `mtx` | 🔜 Stub | Metatranscriptome |
+| `mgx_mtx` | ✅ Ready | Paired metagenome + metatranscriptome, joined by the RNA/DNA ratio (matches `biobakery_workflows wmgx_wmtx`, v3.2) |
+| `mtx` | ✅ Ready | Whole metatranscriptome shotgun: QC + taxonomy + function |
 | `16s` | 🔜 Stub | 16S amplicon (DADA2 / QIIME2 planned) |
 | `vis` | ✅ Ready *(standalone)* | Visualization report — QC, taxonomy, ordination, heatmaps, pathways/ECs (matches `biobakery_workflows vis`, v3.2) |
 | `stats` | ✅ Ready *(standalone)* | Statistics — feature tables, mantel, MaAsLin2, HAllA, stratified pathways, beta diversity / PERMANOVA (matches `biobakery_workflows stats`, v3.2) |
@@ -489,7 +489,13 @@ Skip the expensive stages with `--stats_bypass_maaslin` / `--stats_bypass_halla`
 | Parameter | Default | Description |
 |---|---|---|
 | `--workflow` | `mgx` | Workflow: `mgx \| mtx \| mgx_mtx \| 16s \| vis \| stats \| assembly` |
-| `--readsdir` | *required* | Directory containing input FASTQ files |
+| `--readsdir` | *required* | Directory containing input FASTQ files (all workflows except `mgx_mtx`) |
+| `--input_metagenome` | *required for `mgx_mtx`* | Folder of raw metagenome reads |
+| `--input_metatranscriptome` | *required for `mgx_mtx`* | Folder of raw metatranscriptome reads |
+| `--input_mapping` | `null` | `mgx_mtx` only. Tab-delimited `<rna sample>\t<dna sample>` per line, `#` comments allowed. With a mapping, RNA samples reuse the paired DNA sample's MetaPhlAn profile instead of being profiled themselves. |
+| `--bypass_norm_ratio` | `false` | `mgx_mtx` only. Skip the RNA/DNA relative expression ratio. |
+| `--host_transcriptome` | *set per profile* | Host mRNA bowtie2 index, used by `mtx` QC and the mtx half of `mgx_mtx` |
+| `--rrna_db` | *set per profile* | SILVA rRNA bowtie2 index, same |
 | `--outdir` | `results` | Output directory |
 | `--paired_end` | `true` | `true` for paired-end, `false` for single-end |
 | `--filepattern` | `*_R{1,2}*.fastq.gz` | Glob to match reads. Paired-end must use `{1,2}`. |
@@ -848,8 +854,8 @@ biobakery-nextflow/
 ├── workflows/
 │   ├── mgx.nf                           # MGX: QC → taxonomy → function (+ viral/strain optional)
 │   ├── assembly.nf                  # MAG assembly → binning → SGB clustering
-│   ├── mtx.nf                           # MTX stub
-│   ├── mgx_mtx.nf                       # MGX+MTX stub
+│   ├── mtx.nf                           # MTX: QC (3 kneaddata DBs) + taxonomy + function
+│   ├── mgx_mtx.nf                       # Paired MGX+MTX + RNA/DNA ratio
 │   ├── sixteens.nf                      # 16S stub
 │   ├── vis.nf                           # Visualization report
 │   └── stats.nf                         # Statistics

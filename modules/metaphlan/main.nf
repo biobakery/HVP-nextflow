@@ -4,10 +4,11 @@ nextflow.enable.dsl=2
 // MetaPhlAn — taxonomic profiling
 process metaphlan {
     tag "$sample"
-    publishDir "${params.outdir}/metaphlan/${params.metaphlan_index}", mode: 'copy'
+    publishDir path: { "${params.outdir}/${subdir}metaphlan/${params.metaphlan_index}" }, mode: 'copy'
 
     input:
     tuple val(sample), path(kneads)
+    val subdir
 
     output:
     tuple val(sample), path("${sample}_profile_${params.metaphlan_index}.tsv"),   emit: profile
@@ -45,10 +46,11 @@ process metaphlan {
 // Compress MetaPhlAn SAM file (saves significant disk space)
 process metaphlan_bzip {
     tag "$sample"
-    publishDir "${params.outdir}/metaphlan/bzip", mode: 'copy'
+    publishDir path: { "${params.outdir}/${subdir}metaphlan/bzip" }, mode: 'copy'
 
     input:
     tuple val(sample), path(sam)
+    val subdir
 
     output:
     tuple val(sample), path("${sample}_${params.metaphlan_index}.sam.bz2"), emit: sam_bzip
@@ -61,10 +63,11 @@ process metaphlan_bzip {
 
 // Merge per-sample MetaPhlAn profiles into a single table
 process metaphlan_merge {
-    publishDir "${params.outdir}/metaphlan", mode: 'copy'
+    publishDir path: { "${params.outdir}/${subdir}metaphlan" }, mode: 'copy'
 
     input:
     path profiles
+    val subdir
 
     output:
     path "merged_metaphlan_profiles.tsv", emit: merged

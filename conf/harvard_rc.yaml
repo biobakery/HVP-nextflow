@@ -1,6 +1,6 @@
 ### ============================================================
 ### Harvard FASRC / HSPH (Cannon) — biobakery-nextflow params
-### biobakery-workflows-nextflow v0.0.2
+### biobakery-workflows-nextflow v0.0.4
 ### ============================================================
 ###
 ### Tool stack:
@@ -115,6 +115,13 @@ filepattern:  "*_R{1,2}*.fastq.gz"
 #   mouse C57BL:     /n/lab_storage/huttenhower_lab/data/kneaddata_databases/mouse_C57BL
 #   ribosomal RNA:   /n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2
 host_genome: "/n/lab_storage/huttenhower_lab/data/kneaddata_databases/hg38"
+
+# Metatranscriptome runs (--workflow mtx, and the mtx half of mgx_mtx) also
+# remove host mRNA and rRNA, matching the wts half of biobakery_workflows
+# wmgx_wmtx. Ignored by the mgx, 16s and assembly workflows.
+# params: --host_transcriptome / --rrna_db
+host_transcriptome: "/n/lab_storage/huttenhower_lab/data/kneaddata_databases/transcriptome"
+rrna_db:            "/n/lab_storage/huttenhower_lab/data/kneaddata_databases/ribosomal_RNA/SILVA_128_LSUParc_SSUParc_ribosomal_RNA_v0.2"
 
 # ------------------------------------
 # MetaPhlAn 4.1.1 — taxonomic profiling
