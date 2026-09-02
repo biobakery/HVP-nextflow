@@ -14,31 +14,31 @@ include { archive_output }               from '../modules/utils/archive/main.nf'
 //
 // Like the AnADAMA workflow this takes a folder of bioBakery output and
 // discovers the data files in it by their known names, rather than being handed
-// individual files. When run at the end of mgx/mtx/16s the folder is the run's
-// own output directory, so there is a single code path either way.
+// individual files. A chained run is handed the folder stage_report_input
+// builds from that run's own channels, so there is a single code path either
+// way.
 //
-// The `ready` channel exists only to order this after the profiling stages when
-// chained; standalone runs pass a value channel that fires immediately.
+// The folder arrives as a channel rather than as a path so that a chained run
+// can hand over the folder stage_report_input builds from the profiling
+// outputs: that both orders vis after profiling and avoids reading
+// params.outdir, which publishDir fills in asynchronously.
 workflow VIS {
 
     take:
-    ready
+    // A value channel, so every consumer below can read it: Channel.value for a
+    // standalone run, and stage_report_input's output for a chained one, which
+    // is a value channel because all of its inputs are.
+    input_dir_ch    // the bioBakery output folder to report on
 
     main:
     def no_file = file("${projectDir}/assets/NO_FILE")
-    def input_dir = file(params.vis_input ?: params.outdir)
-
-    if (!input_dir.exists())
-        error "ERROR: vis input folder not found: ${input_dir}\nSet --vis_input to a bioBakery output folder."
 
     metadata_ch = params.input_metadata
         ? Channel.value(file(params.input_metadata))
         : Channel.value(no_file)
 
     // ── Identify the input files ───────────────────────────────────────────
-    folder_ch = ready.first().map { input_dir }
-
-    identify_inputs(folder_ch, metadata_ch, 'vis')
+    identify_inputs(input_dir_ch, metadata_ch, 'vis')
 
     manifest_ch = identify_inputs.out.manifest
     info_ch     = manifest_ch.map { json -> new JsonSlurper().parse(json.toFile()) }
@@ -47,7 +47,9 @@ workflow VIS {
     // generate_alpha_diversity_plots() calls create_feature_table_inputs first;
     // wmgx profiles go through create_feature_table.py and 16s profiles through
     // trim_taxonomy.py.
-    taxonomy_ch = info_ch.map { m -> [ m.study_type, file("${input_dir}/${m.taxonomic_profile}") ] }
+    // the manifest holds paths relative to the folder, so both travel together
+    taxonomy_ch = info_ch.combine(input_dir_ch)
+        .map { m, dir -> [ m.study_type, file("${dir}/${m.taxonomic_profile}") ] }
 
     // not published: vis_report publishes the whole `vis` folder wholesale, so
     // this stays an intermediate -- see the note in the feature_table module
@@ -73,15 +75,15 @@ workflow VIS {
     }
 
     // ── EC names ───────────────────────────────────────────────────────────
-    ecs_input_ch = info_ch
-        .filter { m -> m.study_type == 'WGX' && m.ecsabundance }
-        .map { m -> file("${input_dir}/${m.ecsabundance}") }
+    ecs_input_ch = info_ch.combine(input_dir_ch)
+        .filter { m, dir -> m.study_type == 'WGX' && m.ecsabundance }
+        .map    { m, dir -> file("${dir}/${m.ecsabundance}") }
 
     ecs_ch = add_ec_names(ecs_input_ch).ecs.ifEmpty(no_file)
 
     // ── Report and archive ─────────────────────────────────────────────────
     vis_report(
-        Channel.value(input_dir),
+        input_dir_ch,
         manifest_ch,
         metadata_ch,
         alpha_ch,

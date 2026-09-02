@@ -12,6 +12,8 @@ include { STRAIN_PROFILING }                               from '../subworkflows
 include { rna_dna_norm }                                   from '../modules/utils/rna_dna_norm/main.nf'
 include { version_log }                                    from '../modules/utils/version_log/main.nf'
 include { mtx_kneaddata_dbs }                              from '../subworkflows/mtx_common.nf'
+include { stage_report_input }                             from '../modules/utils/report_input/main.nf'
+include { REPORTING }                                      from '../subworkflows/reporting.nf'
 include { merge_pairs as MERGE_MGX }                       from '../modules/utils/merge_pairs/main.nf'
 include { merge_pairs as MERGE_MTX }                       from '../modules/utils/merge_pairs/main.nf'
 
@@ -40,6 +42,7 @@ workflow MGX_MTX {
 
     // Published under the same folder names biobakery_workflows 3.2 uses, so a
     // downstream vis/stats run finds the two halves where it expects them.
+    def no_file = file("${projectDir}/assets/NO_FILE")
     def MGX_DIR = 'whole_metagenome_shotgun/'
     def MTX_DIR = 'whole_metatranscriptome_shotgun/'
 
@@ -107,7 +110,7 @@ workflow MGX_MTX {
             .mix( FUNC_MTX.out.merged_pathabundance.map    { f -> tuple('paths', f) } )
 
         mapping_file = mapping_given ? file(params.input_mapping, checkIfExists: true)
-                                     : file("${projectDir}/assets/NO_FILE")
+                                     : no_file
 
         rna_dna_norm(dna_tables.join(rna_tables), mapping_file)
     }
@@ -115,6 +118,32 @@ workflow MGX_MTX {
     // ── Step 5: strain profiling, on the metagenome half only ─────────────
     if (params.run_strain_profiling) {
         STRAIN_PROFILING(TAX_MGX.out.sam_bzip)
+    }
+
+    // ── Reports (vis / stats) ─────────────────────────────────────────────
+    // On the metagenome half only, and staged at the root of the folder rather
+    // than under whole_metagenome_shotgun/. files.ShotGun.path() looks for
+    // <folder>/metaphlan/merged/metaphlan_taxonomic_profiles.tsv and, failing
+    // that, <folder>/metaphlan_taxonomic_profiles.tsv -- search_for_file does
+    // not walk subdirectories (files.py:79). A folder holding both assays is
+    // therefore not something vis can read, which is consistent with upstream:
+    // `biobakery_workflows vis` takes one assay's output folder.
+    //
+    // The metatranscriptome half is not reported. With a mapping file it has no
+    // taxonomic profile of its own at all, and without one it is a second assay
+    // needing its own report; either way `--workflow vis --vis_input
+    // <outdir>/whole_metatranscriptome_shotgun` runs it separately.
+    if (params.run_vis || params.run_stats) {
+        REPORTING(
+            stage_report_input(
+                TAX_MGX.out.merged,
+                TAX_MGX.out.species_counts,
+                params.run_qc ? QC_MGX.out.read_counts : Channel.value(no_file),
+                params.run_functional_profiling ? FUNC_MGX.out.merged_tables.collect() : Channel.value([]),
+                params.run_functional_profiling ? FUNC_MGX.out.count_tables.collect()  : Channel.value([]),
+                ''
+            ).folder
+        )
     }
 
     if (params.log_versions) {

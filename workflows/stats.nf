@@ -22,21 +22,22 @@ include { archive_output }                         from '../modules/utils/archiv
 // build at DAG-construction time by reading MaAsLin2's significant_results.tsv
 // and the metadata in Python, so here that becomes a runtime fan-out over a
 // plan emitted as JSON.
+// The folder arrives as a channel for the same reason it does in VIS -- see
+// the note there.
 workflow STATS {
 
     take:
-    ready
+    // A value channel, so every consumer below can read it: Channel.value for a
+    // standalone run, and stage_report_input's output for a chained one, which
+    // is a value channel because all of its inputs are.
+    input_dir_ch    // the bioBakery output folder to analyse
 
     main:
     def no_file = file("${projectDir}/assets/NO_FILE")
-    def input_dir = file(params.stats_input ?: params.outdir)
 
     // stats.py marks --input-metadata as required
     if (!params.input_metadata)
         error "ERROR: --input_metadata is required for the stats workflow."
-
-    if (!input_dir.exists())
-        error "ERROR: stats input folder not found: ${input_dir}\nSet --stats_input to a bioBakery output folder."
 
     if (params.stats_random_effects && !params.stats_static_covariates)
         error "ERROR: Please provide the static covariates when running with longitudinal " +
@@ -45,9 +46,7 @@ workflow STATS {
     metadata_ch = Channel.value(file(params.input_metadata))
 
     // ── Identify the input files ───────────────────────────────────────────
-    folder_ch = ready.first().map { input_dir }
-
-    identify_inputs(folder_ch, metadata_ch, 'stats')
+    identify_inputs(input_dir_ch, metadata_ch, 'stats')
 
     manifest_ch = identify_inputs.out.manifest
     info_ch     = manifest_ch.map { json -> new JsonSlurper().parse(json.toFile()) }
@@ -55,7 +54,8 @@ workflow STATS {
     // ── Feature tables ─────────────────────────────────────────────────────
     // create_feature_table_inputs(): taxonomy first, then pathways, then any
     // other data files. The order is preserved so the report sections match.
-    feature_inputs_ch = info_ch.flatMap { m ->
+    // the manifest holds paths relative to the folder, so both travel together
+    feature_inputs_ch = info_ch.combine(input_dir_ch).flatMap { m, input_dir ->
         def items = []
         def taxonomy = file("${input_dir}/${m.taxonomic_profile}")
 
@@ -94,7 +94,8 @@ workflow STATS {
         types.join(',')
     }
 
-    taxonomy_profile_ch = info_ch.map { m -> file("${input_dir}/${m.taxonomic_profile}") }
+    taxonomy_profile_ch = info_ch.combine(input_dir_ch)
+        .map { m, input_dir -> file("${input_dir}/${m.taxonomic_profile}") }
 
     // ── Mantel tests ───────────────────────────────────────────────────────
     // Only run when there is more than one data set to compare.
@@ -134,9 +135,9 @@ workflow STATS {
 
     // ── Stratified pathway barplots ────────────────────────────────────────
     if (!params.stats_bypass_maaslin) {
-        pathabundance_ch = info_ch
-            .filter { m -> m.pathabundance && m.study_type == 'wmgx' }
-            .map { m -> file("${input_dir}/${m.pathabundance}") }
+        pathabundance_ch = info_ch.combine(input_dir_ch)
+            .filter { m, input_dir -> m.pathabundance && m.study_type == 'wmgx' }
+            .map    { m, input_dir -> file("${input_dir}/${m.pathabundance}") }
 
         stratified_metadata(pathabundance_ch, metadata_ch)
 

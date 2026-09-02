@@ -40,11 +40,11 @@ workflow {
             break
 
         case 'vis':
-            VIS(Channel.of(true))
+            VIS(Channel.value(report_input_dir(params.vis_input, 'vis')))
             break
 
         case 'stats':
-            STATS(Channel.of(true))
+            STATS(Channel.value(report_input_dir(params.stats_input, 'stats')))
             break
 
         case 'assembly':
@@ -54,4 +54,17 @@ workflow {
         default:
             error "Unknown workflow '${params.workflow}'. Choose: mgx | mtx | mgx_mtx | 16s | vis | stats | assembly"
     }
+}
+
+// The folder a standalone vis or stats run reports on. Chained runs get the
+// folder stage_report_input builds instead, so this is only for --workflow
+// vis|stats.
+def report_input_dir(setting, label) {
+    def dir = file(setting ?: params.outdir)
+
+    if (!dir.exists())
+        error "ERROR: ${label} input folder not found: ${dir}\n" +
+              "Set --${label}_input to a bioBakery output folder."
+
+    return dir
 }
