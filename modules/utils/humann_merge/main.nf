@@ -24,8 +24,21 @@ process humann_join {
 
     script:
     """
+    # Stage the tables under their bare sample names first. humann_join_tables
+    # normally takes the sample name from each table's own header, but falls
+    # back to the file basename when every file carries the same header name --
+    # a test that is trivially true for a single file (join_tables.py:90). A
+    # one-sample run therefore produced a column called
+    # "<sample>_<feature>_<version>" while a two-sample run produced "<sample>",
+    # and the mgx_mtx RNA/DNA ratio then refused to match the two halves.
+    mkdir -p renamed
+    for f in tables/*; do
+        b=\$(basename "\$f")
+        mv "\$f" renamed/"\$(echo "\$b" | sed 's/_${label}_${params.humann_version}\\.tsv\$/.tsv/')"
+    done
+
     humann_join_tables \\
-        --input tables \\
+        --input renamed \\
         --output merged_${label}_${params.humann_version}.tsv
     """
 }
