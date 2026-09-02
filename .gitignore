@@ -2,6 +2,7 @@ test/output/*
 test/results/*
 .nextflow*
 work/*
+test/work/
 work_test*/
 output/*
 .DS_Store

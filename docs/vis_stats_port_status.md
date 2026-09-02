@@ -150,6 +150,15 @@ with `python make_fixture.py --output input`.
 `test/tutorial_output` in the repo is **not** usable for vis: it is a single
 sample and 29 clades, so `document.read_table()` finds no sample set.
 
+## Verified under -profile harvard_rc
+
+`bash test/run_tests.sh` (submitted with `sbatch test/submit_tests.sh`) runs
+`VIS` and `STATS` against the generated fixture on SLURM as tests 11 and 12.
+Both complete and publish their full output set --
+`vis/{mgx_report.html,figures,data,alpha_diversity_plots}` + `vis.zip`, and
+`stats/{stats_report.html,features,beta_diversity,mantel_test,maaslin2_*,
+halla_*,stratified_pathways,data}` + `stats.zip`.
+
 ## Verified so far
 
 Everything below was re-verified on a clean run (no `-resume`, work directories
@@ -286,12 +295,25 @@ not staged as task inputs, so editing them does not change a task hash and
 work needed a full re-run. Either stage the scripts as inputs or remember to
 drop `-resume` when a driver changes.
 
-### 6. Not yet done
-- `conf/base.config` and `conf/profiles/harvard_rc.config` have **no resource
-  blocks or `beforeScript` module loads** for the new processes, with one
-  exception: `withName: halla` is wired in `harvard_rc.config`, because that
-  one is not a tuning knob but a correctness requirement (issue 2). Everything
-  else still needs blocks.
+### ~~6a. No configs for the new processes~~ — fixed
+`conf/base.config` now carries resource blocks for every vis/stats process and
+`conf/profiles/harvard_rc.config` gives them all
+`module load rocky8/biobakeryworkflows/3.2`, which pulls in
+`rocky8/anadama2/0.10.0-devel` (pweave, and the R_LIBS that holds vegan),
+R 4.5.1 and HUMAnN. `withName: halla` keeps its own module, for the reason in
+issue 2. Both workflows now run under `-profile harvard_rc` on SLURM, not only
+as `-profile local` hand runs, and are covered by `test/run_tests.sh` (tests 11
+and 12).
+
+One porting defect surfaced only once they ran outside the hand-run
+environment: `alpha_diversity`, `mantel_test` and both `beta_diversity` calls
+resolved their R script with
+`python -c "import biobakery_bootstrap; ..."`, which works only when
+`bin/scripts` is on PYTHONPATH -- true of `env.sh`, true of no profile.
+`biobakery_bootstrap.py` grew a `--rscript` / `--template` CLI and those four
+call sites now invoke it by path.
+
+### 6b. Not yet done
 - README / architecture docs not updated.
 - The 0.0.4 hutlab modulefile is not written. Template it from
   `/n/lab_storage/huttenhower_lab/tools/hutlab/src/modules_rocky8/rocky8/biobakery-workflows-nextflow/0.0.3`.
@@ -446,6 +468,6 @@ without lmod, and is the hand-run equivalent of the `withName: halla`
 
 1. Chained mode (issue 4) — the `stage_report_input` process. This is the last
    functional gap; both workflows are complete and verified standalone.
-2. Configs and the modulefile (issue 6). Only `withName: halla` exists so far.
+2. The 0.0.4 modulefile (issue 6b). The configs are done (issue 6a).
 3. `--report_format pdf`, which has not been exercised since the link changes.
 4. Section-by-section comparison against a fresh upstream 3.2 run.

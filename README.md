@@ -377,6 +377,12 @@ nextflow run main.nf -profile harvard_rc \
   --run_qc   false
 ```
 
+With paired input and `--run_qc false`, each pair is concatenated into one file
+before profiling, because MetaPhlAn and HUMAnN take a single input file per
+sample. This is what `biobakery_workflows` does with `--bypass-quality-control`
+(`shotgun.merge_pairs`); when QC runs, KneadData produces the concatenated file
+itself.
+
 ---
 
 ### 9. HUMAnN v4 (alpha)
@@ -829,7 +835,47 @@ Test FASTQ files live in `test/`:
 | Directory | Contents |
 |---|---|
 | `test/rawfastq/` | Two paired-end samples |
-| `test/single_end_rawfastq/` | `HD32R1_subsample.fastq.gz` — [bioBakery tutorial](https://github.com/biobakery/biobakery_workflows/tree/master/examples/tutorial/input) demo sample |
+| `test/single_end_rawfastq/` | `HD32R1_subsample.fastq.gz` — [bioBakery tutorial](https://github.com/biobakery/biobakery_workflows/tree/master/examples/tutorial/input) demo sample, plus one single-end read file |
+
+### Integration suite
+
+`test/run_tests.sh` runs every workflow except 16s, in both library layouts,
+against the real tool stack. On Harvard FASRC, submit it rather than running it
+on a login node:
+
+```sh
+sbatch test/submit_tests.sh
+```
+
+| Test | Workflow | Layout | Covers |
+|---|---|---|---|
+| 1 | mgx | single | version log only, local executor |
+| 2 | mgx | single | KneadData + MetaPhlAn + HUMAnN |
+| 3 | mgx | paired | KneadData + MetaPhlAn + HUMAnN |
+| 4 | mgx | paired | `--run_qc false`, i.e. pair merging |
+| 5 | mtx | single | KneadData with the 3 metatranscriptome databases |
+| 6 | mtx | paired | KneadData with the 3 metatranscriptome databases |
+| 7 | mgx_mtx | paired | mapping file, both halves, RNA/DNA ratio |
+| 8 | mgx_mtx | single | no mapping file, each half profiled separately |
+| 9 | assembly | single | MEGAHIT → MetaBAT2 → CheckM2 → PhyloPhlAn → SGB |
+| 10 | assembly | paired | same |
+| 11 | vis | — | report from a bioBakery output folder |
+| 12 | stats | — | MaAsLin2 / HAllA / mantel / beta diversity + report |
+| 13-14 | — | — | the toggle and two-input guards |
+
+The drivers run in parallel, each with its own launch and work directory; logs
+and outputs land in `test/results/<test name>{.log,/}`.
+
+Tests 11 and 12 need a bioBakery-output fixture, which is generated rather than
+committed (it is too large, and reproducible from a seed). They are skipped with
+a message if it is absent. Point `VIS_STATS_FIXTURE` at it, or leave it at the
+default `~/biobakery_vis_stats_test/input` and regenerate it with:
+
+```sh
+python ~/biobakery_vis_stats_test/make_fixture.py --output input
+```
+
+### Unit tests
 
 Run with [nf-test](https://www.nf-test.com/):
 
@@ -860,6 +906,7 @@ biobakery-nextflow/
 │   ├── vis.nf                           # Visualization report
 │   └── stats.nf                         # Statistics
 ├── subworkflows/
+│   ├── read_input.nf                    # input channel + per-sample layout detection
 │   ├── quality_control.nf               # KneadData (single + paired routing)
 │   ├── taxonomic_profiling.nf           # MetaPhlAn + bzip + merge
 │   ├── functional_profiling.nf          # HUMAnN + regroup + rename + merge
@@ -886,6 +933,7 @@ biobakery-nextflow/
 │       ├── humann_regroup/main.nf
 │       ├── humann_rename/main.nf
 │       ├── mash/main.nf                 # sketch + paste + dist + sgb_cluster + merge_tax
+│       ├── merge_pairs/main.nf          # concatenate a pair when QC is bypassed
 │       └── version_log/main.nf
 ├── conf/
 │   ├── base.config                      # Default resources + check_max()
