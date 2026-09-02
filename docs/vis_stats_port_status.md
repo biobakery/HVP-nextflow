@@ -17,8 +17,9 @@ Reference implementation being ported:
    them at a bioBakery output folder and they discover the data files by name and
    by content. One code path for both standalone and chained runs.
 
-2. **They run by default at the end of the read-based workflows**, toggled with
-   `--run_vis false` / `--run_stats false`.
+2. **vis runs by default at the end of the read-based workflows** (`--run_vis
+   false` to skip); **stats is opt-in** (`--run_stats true`). See issue 4 for
+   why they differ.
 
 3. **anadama2 is being removed as a dependency**, not just as a workflow engine.
    This is the decision that shapes the rest:
@@ -267,33 +268,74 @@ now excluded from the stats feature set outright (see the decision below), so
 the collision cannot arise; `deduplicate_by_type()` stays as the general
 safeguard, since any other pair of types colliding on a suffix would hit it.
 
-### 4. Chained mode is not wired
-`VIS`/`STATS` take a `ready` channel to order them after profiling, and `main.nf`
-passes `Channel.of(true)` for standalone runs. The read-based workflows do not yet
-call them. Two real problems have to be solved first:
+### ~~4. Chained mode is not wired~~ — fixed
+`mgx`, `mtx` and `mgx_mtx` now finish by running `VIS`, and `STATS` when
+`--run_stats true` and `--input_metadata` are both given, over a folder built by a new
+`stage_report_input` process (`modules/utils/report_input`). Both problems this
+issue recorded are solved by taking the files from **channels** rather than
+from the published output folder:
 
-- **`publishDir` is asynchronous.** Nextflow does not guarantee published files
-  are on disk before a downstream process runs, so pointing vis at `params.outdir`
-  mid-run is a race.
-- **Layout mismatch.** `files.ShotGun` expects bioBakery names and locations —
-  `metaphlan/merged/metaphlan_taxonomic_profiles.tsv`,
-  `kneaddata/merged/kneaddata_read_count_table.tsv`,
-  `humann/merged/{pathabundance_relab,ecs_relab}.tsv`,
-  `humann/counts/humann_{feature_counts,read_and_species_count_table}.tsv`.
-  This pipeline publishes different names, so the named lookups miss and only
-  content-sniffed files (taxonomy, pathways, ECs) are found. The report loses its
-  QC read-count, HUMAnN read-count and feature-count sections.
+- the `publishDir` race disappears, because nothing reads `params.outdir`;
+- the layout mismatch disappears, because the staged folder uses the names
+  `files.ShotGun` looks for -- `metaphlan/merged/metaphlan_taxonomic_profiles.tsv`,
+  `kneaddata/merged/kneaddata_read_count_table.tsv`, `humann/merged/<feature>.tsv`
+  and `humann/counts/*`.
 
-Both are fixed the same way: a `stage_report_input` process that builds a
-bioBakery-standard folder from the actual output *channels*. That is the
-recommended next piece of work.
+`VIS` and `STATS` take that folder as a channel now, in place of the `ready`
+flag; `main.nf` passes `Channel.value(<folder>)` for a standalone run.
 
-### 5. Nextflow does not re-run on driver changes
-`bin/scripts/*.py` and `bin/lib/*.py` are referenced by `${projectDir}` path,
-not staged as task inputs, so editing them does not change a task hash and
-`-resume` happily serves a stale cached result. Every driver change during this
-work needed a full re-run. Either stage the scripts as inputs or remember to
-drop `-resume` when a driver changes.
+`mgx_mtx` reports on its **metagenome half only**. Staging both halves under
+`whole_meta*_shotgun/` was tried first and does not work: `files.ShotGun.path()`
+falls back to `<folder>/<filename>` and no further (`files.py:79`), so every
+named lookup missed and `identify_inputs` exited with the "no data files found"
+description. That is consistent with upstream, where `vis` takes one assay's
+folder. The metatranscriptome half is reachable with
+`--workflow vis --vis_input <outdir>/whole_metatranscriptome_shotgun`.
+
+**A chained report failure is not the run's failure.** `withName: '.*:REPORTING:.*'`
+sets `errorStrategy = 'ignore'` in `conf/base.config`: the profiles and tables
+are already published, and vis and stats do legitimately fail on a study too
+small to visualise -- an ordination of two samples, a heatmap of a handful of
+features. Standalone runs carry no `REPORTING:` prefix and still fail loudly.
+The staged folder is published as `<outdir>/report_input/`.
+
+Three count tables the report sections are built from did not exist in this
+pipeline at all and were ported at the same time, each a one-line upstream
+task: `kneaddata_read_counts` (`shotgun.kneaddata_read_count_table`),
+`metaphlan_species_counts` (the `metaphlan_count_species` task) and
+`humann_log_counts` (`humann_count_alignments_species`). They are published in
+the bioBakery locations, so a standalone vis run pointed at this pipeline's own
+output folder now finds them too.
+
+**Chained `stats` is opt-in** (`--run_stats true`), which revises decision 2
+above. It is a study-level analysis rather than a report: MaAsLin2, HAllA and
+the mantel test need enough samples to fit anything, and chained onto a small
+study they fail and take an otherwise complete profiling run down with them --
+which the two-sample test run demonstrated. `vis` stays on by default. With
+`--run_stats true` and no metadata the stats half is skipped with a warning
+rather than failing, since `stats.py` requires metadata and a read-based run
+has no reason to have been given any.
+
+Four defects surfaced the first time vis ran chained, all invisible to a
+standalone run against the fixture:
+
+- `vis_report` staged `metadata`, `alpha_diversity_plots` and `ecs_file` under
+  their own basenames, and all three fall back to the same `assets/NO_FILE`
+  sentinel -- so any run without metadata failed with "multiple input files for
+  each of the following file names: NO_FILE". They now stage into separate
+  directories.
+- `alpha_diversity` exits 1 with "No data remain in the data after filtering for
+  min abundance and prevalence" when the feature table is too sparse, which a
+  couple of low-biomass samples produce routinely. That one message is now
+  carried through as "no plots" rather than failing the run; every other failure
+  still fails the task.
+- `stage_report_input` hit the same `NO_FILE` collision as `vis_report`, for the
+  same reason, whenever two of its optional inputs were skipped together.
+- `taxonomy.pmd` binds `caption` only as the return of `document.show_pcoa()`.
+  pweave catches an exception inside a chunk, prints it into the report and
+  carries on -- but the inline `<%= caption %>` then raises `NameError` and kills
+  the whole render, which is exactly what a study too small to ordinate
+  produces. Both captions are now bound before the call.
 
 ### ~~6a. No configs for the new processes~~ — fixed
 `conf/base.config` now carries resource blocks for every vis/stats process and
@@ -313,18 +355,19 @@ resolved their R script with
 `biobakery_bootstrap.py` grew a `--rscript` / `--template` CLI and those four
 call sites now invoke it by path.
 
-### 6b. Not yet done
-- README / architecture docs not updated.
-- The 0.0.4 hutlab modulefile is not written. Template it from
-  `/n/lab_storage/huttenhower_lab/tools/hutlab/src/modules_rocky8/rocky8/biobakery-workflows-nextflow/0.0.3`.
-  It must provide, beyond the 0.0.3 contents: **pweave** (a separate PyPI
-  package that happens to live in the anadama2 module's site-packages here),
-  **R 4.5.1 with the anadama2 `R_LIBS`** (that is where `vegan` is — not in the
-  R module, not in biobakery's own `R_LIBS`), **`$R_HOME/lib64/R/lib` on
-  `LD_LIBRARY_PATH`**, and **HUMAnN** on `PATH` for `add_ec_names`, which
-  shells out to `humann_rename_table`. It must **not** try to accommodate
-  HAllA: HAllA needs numpy < 2 and gets its own module on the `halla` process
-  instead (issue 2).
+### ~~6b. The 0.0.4 modulefile~~ — written
+`rocky8/biobakery-workflows-nextflow/0.0.4` exists and needs nothing beyond
+what 0.0.3 had plus `KNEADDATA_DB_HUMAN_TRANSCRIPTOME`. The requirement this
+issue used to record -- that the modulefile also carry pweave, R 4.5.1 with the
+anadama2 `R_LIBS`, `LD_LIBRARY_PATH` and HUMAnN for the report steps -- is
+obsolete: those are per-process needs, and they are met by the `beforeScript`
+blocks added in issue 6a. The modulefile only has to put Nextflow and a JDK on
+`PATH` and point at the pipeline and its params file.
+
+### 6c. Not yet done
+- Nothing from issue 6 remains. The README documents the chained mode
+  (use case 14), the vis/stats parameters and the bioBakery-standard tables the
+  new count steps publish.
 
 ---
 
@@ -466,8 +509,10 @@ without lmod, and is the hand-run equivalent of the `withName: halla`
 
 ## Next session, in order
 
-1. Chained mode (issue 4) — the `stage_report_input` process. This is the last
-   functional gap; both workflows are complete and verified standalone.
-2. The 0.0.4 modulefile (issue 6b). The configs are done (issue 6a).
-3. `--report_format pdf`, which has not been exercised since the link changes.
-4. Section-by-section comparison against a fresh upstream 3.2 run.
+1. `--report_format pdf`, which has not been exercised since the link changes.
+2. Section-by-section comparison against a fresh upstream 3.2 run. This is the
+   one substantive item left: an upstream run has to be produced first, and an
+   upstream 3.2 stats run cannot complete on a standard wmgx folder (decision 6),
+   so the comparison has to be section by section rather than a diff.
+3. The chained reports are covered by `test/run_tests.sh` for mgx and mgx_mtx;
+   `mtx` chaining runs the same code and is not separately tested.

@@ -28,11 +28,25 @@ WORK_BASE="${REPO_ROOT}/test/work"
 NF="/n/lab_storage/huttenhower_lab/tools/nextflow/24.10.4/bin/nextflow"
 PROFILE="-profile harvard_rc -params-file ${REPO_ROOT}/conf/harvard_rc.yaml"
 COMMON="--run_viral_profiling false --run_strain_profiling false"
+# Chaining vis/stats is exercised deliberately by tests 3 and 7; the other runs
+# turn it off so a report failure cannot mask the stage they are testing.
+NO_REPORTS="--run_vis false --run_stats false"
 # The vis/stats fixture lives outside the repo; regenerate it with
 # `python ~/biobakery_vis_stats_test/make_fixture.py --output input`.
 FIXTURE="${VIS_STATS_FIXTURE:-${HOME}/biobakery_vis_stats_test/input}"
+# The assembly fixture is simulated from two real genomes, because the bundled
+# reads cannot produce a MAG; regenerate it with
+# `python3 ~/biobakery_assembly_test/make_fixture.py --output input_pe`
+# (add --single for input_se).
+ASM_FIXTURE="${ASSEMBLY_FIXTURE:-${HOME}/biobakery_assembly_test}"
 
 mkdir -p "${RESULTS_BASE}" "${WORK_BASE}"
+
+# Two-sample metadata for the chained stats run in test 3. Two samples is below
+# what most of the stats analyses need, so that test asserts the report is
+# produced, not that every section has content.
+printf 'sample\tgroup\nFG00004_S26\tcase\nFG00005_S50_L001\tcontrol\n' \
+    > "${RESULTS_BASE}/mgx_metadata.tsv"
 
 pass=0; fail=0
 
@@ -42,7 +56,10 @@ nf_run() {
     local name="$1"; shift
     local out="${RESULTS_BASE}/${name}"
     local launch="${WORK_BASE}/${name}_launch"
+    # the .status file goes too: a leftover from a previous run reads as this
+    # run's result while this one is still going
     rm -rf "${out}" "${WORK_BASE}/${name}" "${launch}"
+    rm -f  "${RESULTS_BASE}/${name}.status"
     mkdir -p "${launch}"
     # Each driver launches from its own directory: concurrent runs sharing one
     # launch directory share .nextflow/ -- the history file and the cache -- and
@@ -103,19 +120,27 @@ nf_run test1_versionlog \
     --readsdir "${REPO_ROOT}/test/single_end_rawfastq" \
     --paired_end false \
     --run_qc false --run_taxonomic_profiling false --run_functional_profiling false \
-    ${COMMON} --log_versions true &
+    ${COMMON} ${NO_REPORTS} --log_versions true &
 
-# 2. mgx single-end, full stack: KneadData + MetaPhlAn + HUMAnN
+# 2. mgx single-end, full stack: KneadData + MetaPhlAn + HUMAnN, and the
+#    chained vis report with no metadata at all. --run_stats true without
+#    metadata must skip with a warning rather than fail the run, which is the
+#    other half of what this test checks.
 nf_run test2_mgx_se \
     --workflow mgx \
     --readsdir "${REPO_ROOT}/test/single_end_rawfastq" \
     --paired_end false \
+    --run_stats true \
     ${COMMON} --log_versions true &
 
-# 3. mgx paired-end, full stack
+# 3. mgx paired-end, full stack, with metadata, so the chained vis report also
+#    builds its metadata-driven figures. Chained stats is deliberately left off:
+#    MaAsLin2, HAllA and the mantel test cannot fit anything on two samples, so
+#    it is opt-in and covered standalone by test 12.
 nf_run test3_mgx_pe \
     --workflow mgx \
     --readsdir "${REPO_ROOT}/test/rawfastq" \
+    --input_metadata "${RESULTS_BASE}/mgx_metadata.tsv" \
     ${COMMON} --log_versions true &
 
 # 4. mgx paired-end with QC bypassed: exercises merge_pairs, since MetaPhlAn
@@ -124,7 +149,7 @@ nf_run test4_mgx_pe_noqc \
     --workflow mgx \
     --readsdir "${REPO_ROOT}/test/rawfastq" \
     --run_qc false --run_functional_profiling false \
-    ${COMMON} --log_versions false &
+    ${COMMON} ${NO_REPORTS} --log_versions false &
 
 # 5. mtx single-end — the metatranscriptome database set
 nf_run test5_mtx_se \
@@ -132,14 +157,14 @@ nf_run test5_mtx_se \
     --readsdir "${REPO_ROOT}/test/single_end_rawfastq" \
     --paired_end false \
     --run_functional_profiling false \
-    ${COMMON} --log_versions false &
+    ${COMMON} ${NO_REPORTS} --log_versions false &
 
 # 6. mtx paired-end
 nf_run test6_mtx_pe \
     --workflow mtx \
     --readsdir "${REPO_ROOT}/test/rawfastq" \
     --run_functional_profiling false \
-    ${COMMON} --log_versions false &
+    ${COMMON} ${NO_REPORTS} --log_versions false &
 
 wait
 
@@ -163,6 +188,7 @@ nf_run test7_mgx_mtx_pe \
     --input_metagenome "${REPO_ROOT}/test/rawfastq" \
     --input_metatranscriptome "${FIX}/mtx_pe" \
     --input_mapping "${FIX}/mapping.tsv" \
+    --run_stats false \
     ${COMMON} --log_versions false &
 
 # 8. mgx_mtx single-end, no mapping file: each half is profiled on its own.
@@ -172,19 +198,34 @@ nf_run test8_mgx_mtx_se \
     --input_metatranscriptome "${FIX}/mtx_se" \
     --paired_end false \
     --run_functional_profiling false \
-    ${COMMON} --log_versions false &
+    ${COMMON} ${NO_REPORTS} --log_versions false &
 
 # 9./10. assembly, both layouts
 nf_run test9_assembly_se \
     --workflow assembly \
     --readsdir "${REPO_ROOT}/test/single_end_rawfastq" \
     --paired_end false \
-    ${COMMON} --log_versions false &
+    ${COMMON} ${NO_REPORTS} --log_versions false &
 
 nf_run test10_assembly_pe \
     --workflow assembly \
     --readsdir "${REPO_ROOT}/test/rawfastq" \
-    ${COMMON} --log_versions false &
+    ${COMMON} ${NO_REPORTS} --log_versions false &
+
+# 11a./11b. assembly on the simulated fixture, which does produce MAGs
+if [ -d "${ASM_FIXTURE}/input_pe" ]; then
+    nf_run test13_assembly_mags_pe \
+        --workflow assembly \
+        --readsdir "${ASM_FIXTURE}/input_pe" \
+        ${COMMON} ${NO_REPORTS} --log_versions false &
+fi
+if [ -d "${ASM_FIXTURE}/input_se" ]; then
+    nf_run test14_assembly_mags_se \
+        --workflow assembly \
+        --readsdir "${ASM_FIXTURE}/input_se" \
+        --paired_end false \
+        ${COMMON} ${NO_REPORTS} --log_versions false &
+fi
 
 # 11./12. vis and stats, on the generated bioBakery-output fixture
 if [ -d "${FIXTURE}" ]; then
@@ -209,15 +250,37 @@ note "Test 1: version log"
 check_run   test1_versionlog
 check_files test1_versionlog "pipeline_log.txt"
 
-note "Test 2: mgx single-end — KneadData + MetaPhlAn + HUMAnN"
+# The chained reports are asserted through the folder they are built from --
+# outdir/report_input, in the bioBakery layout files.ShotGun expects -- not
+# through the report itself. Two samples of a thousand reads cannot produce an
+# ordination or a heatmap, so vis legitimately fails on this data; that failure
+# is ignored by design (conf/base.config, withName '.*:REPORTING:.*') and the
+# profiling run still completes. A report with content needs a real study.
+note "Test 2: mgx single-end — KneadData + MetaPhlAn + HUMAnN + chained vis"
 check_run   test2_mgx_se
 check_files test2_mgx_se "*_kneaddata.log" "*_profile_*.tsv" "merged_metaphlan_profiles.tsv" \
-                         "*_genefamilies_*.tsv" "*_pathabundance_*.tsv" "humann_feature_counts.tsv"
+                         "*_genefamilies_*.tsv" "*_pathabundance_*.tsv" "humann_feature_counts.tsv" \
+                         "metaphlan_taxonomic_profiles.tsv" "kneaddata_read_count_table.tsv" \
+                         "ecs_relab.tsv"
 
-note "Test 3: mgx paired-end — KneadData + MetaPhlAn + HUMAnN"
+# Chained stats needs metadata, which this run is not given: it must be skipped
+# with a warning, not fail the run and not silently produce a report.
+if grep -q "Skipping the chained stats workflow" "${RESULTS_BASE}/test2_mgx_se.log" \
+   && [ ! -d "${RESULTS_BASE}/test2_mgx_se/stats" ]; then
+    echo "[PASS] test2_mgx_se: chained stats skipped without metadata"
+    ((pass++))
+else
+    echo "[FAIL] test2_mgx_se: chained stats did not skip cleanly without metadata"
+    ((fail++))
+fi
+
+note "Test 3: mgx paired-end — KneadData + MetaPhlAn + HUMAnN + chained vis"
 check_run   test3_mgx_pe
 check_files test3_mgx_pe "*_kneaddata_paired_1.fastq.gz" "*_profile_*.tsv" "merged_metaphlan_profiles.tsv" \
-                         "*_genefamilies_*.tsv" "*_pathabundance_*.tsv" "humann_feature_counts.tsv"
+                         "*_genefamilies_*.tsv" "*_pathabundance_*.tsv" "humann_feature_counts.tsv" \
+                         "kneaddata_read_count_table.tsv" "metaphlan_species_counts_table.tsv" \
+                         "humann_read_and_species_count_table.tsv" \
+                         "metaphlan_taxonomic_profiles.tsv" "pathabundance_relab.tsv"
 
 note "Test 4: mgx paired-end with QC bypassed — merge_pairs"
 check_run   test4_mgx_pe_noqc
@@ -268,6 +331,8 @@ else
     echo "[PASS] test7_mgx_mtx_pe: mapped run reuses the metagenome profiles"
     ((pass++))
 fi
+# The chained report stages the metagenome half at the root of its own folder.
+check_files test7_mgx_mtx_pe "metaphlan_taxonomic_profiles.tsv"
 
 note "Test 8: mgx_mtx single-end, unmapped"
 check_run   test8_mgx_mtx_se
@@ -284,9 +349,9 @@ fi
 # The bundled reads are heavily host-dominated -- KneadData leaves on the order
 # of a thousand reads per sample -- so MEGAHIT assembles no contigs and no MAGs
 # are produced. These two tests therefore cover that every stage runs, in both
-# layouts, and that the no-MAG path is carried through to a final profile; they
-# do not exercise binning or SGB clustering on real MAGs. That needs a larger
-# fixture than belongs in the repository.
+# layouts, and that the no-MAG path is carried through to a final profile.
+# Binning, CheckM2, PhyloPhlAn and SGB clustering on real MAGs are covered by
+# tests 13 and 14, on the simulated fixture.
 note "Test 9: assembly single-end"
 check_run   test9_assembly_se
 check_files test9_assembly_se "*.final.contigs.fa" "*.contig_depths.txt" "*.abundance.tsv" \
@@ -296,6 +361,32 @@ note "Test 10: assembly paired-end"
 check_run   test10_assembly_pe
 check_files test10_assembly_pe "*.final.contigs.fa" "*.contig_depths.txt" "*.abundance.tsv" \
                                "merged_quality_report.tsv" "phylophlan_out.tsv" "final_profile.tsv"
+
+for t in test13_assembly_mags_pe test14_assembly_mags_se; do
+    layout="paired-end"; [ "${t}" = "test14_assembly_mags_se" ] && layout="single-end"
+    if [ ! -f "${RESULTS_BASE}/${t}.status" ]; then
+        note "Test ${t}: SKIPPED — no assembly fixture at ${ASM_FIXTURE}"
+        echo "  Regenerate it with: python3 ~/biobakery_assembly_test/make_fixture.py --output input_pe"
+        continue
+    fi
+    note "Assembly on simulated reads (${layout}) — MAGs end to end"
+    check_run   "${t}"
+    check_files "${t}" "*.final.contigs.fa" "*.contig_depths.txt" "*.abundance.tsv" \
+                       "merged_quality_report.tsv" "phylophlan_out.tsv" "SGB_info.tsv" \
+                       "final_profile.tsv"
+
+    # This is what the bundled reads cannot show: contigs, real bins, and a
+    # profile with rows in it.
+    bins=$(find "${RESULTS_BASE}/${t}/bins" -name "*.bin.[0-9]*.fa" -size +0c 2>/dev/null | wc -l)
+    rows=$(tail -n +2 "${RESULTS_BASE}/${t}/final_profile.tsv" 2>/dev/null | grep -c . || true)
+    if [ "${bins}" -ge 1 ] && [ "${rows}" -ge 1 ]; then
+        echo "[PASS] ${t}: ${bins} MAG(s) binned, ${rows} row(s) in the final profile"
+        ((pass++))
+    else
+        echo "[FAIL] ${t}: ${bins} MAG(s) binned, ${rows} row(s) in the final profile"
+        ((fail++))
+    fi
+done
 
 if [ -d "${FIXTURE}" ]; then
     note "Test 11: vis"
@@ -311,7 +402,7 @@ else
 fi
 
 # ── Guards, which fail fast and need no cluster ──────────────────────────────
-note "Test 13: toggle guard — viral profiling without taxonomic profiling"
+note "Test 15: toggle guard — viral profiling without taxonomic profiling"
 "${NF}" run "${REPO_ROOT}/main.nf" ${PROFILE} \
     --workflow mgx \
     --readsdir "${REPO_ROOT}/test/single_end_rawfastq" \
@@ -319,9 +410,9 @@ note "Test 13: toggle guard — viral profiling without taxonomic profiling"
     --outdir /tmp/nf_guard_test \
     --run_qc false --run_taxonomic_profiling false --run_functional_profiling false \
     --run_viral_profiling true --log_versions false \
-    2>&1 | grep "ERROR" | head -2 > "${RESULTS_BASE}/test13_guard.log"
+    2>&1 | grep "ERROR" | head -2 > "${RESULTS_BASE}/test15_guard.log"
 
-if grep -q "run_taxonomic_profiling = false, but these require it" "${RESULTS_BASE}/test13_guard.log"; then
+if grep -q "run_taxonomic_profiling = false, but these require it" "${RESULTS_BASE}/test15_guard.log"; then
     echo "[PASS] viral-without-taxonomic guard fires"
     ((pass++))
 else
@@ -329,14 +420,14 @@ else
     ((fail++))
 fi
 
-note "Test 14: mgx_mtx guard — both input folders are required"
+note "Test 16: mgx_mtx guard — both input folders are required"
 "${NF}" run "${REPO_ROOT}/main.nf" ${PROFILE} \
     --workflow mgx_mtx \
     --input_metagenome "${REPO_ROOT}/test/rawfastq" \
     --outdir /tmp/nf_guard_test2 --log_versions false \
-    2>&1 | grep "ERROR" | head -3 > "${RESULTS_BASE}/test14_guard.log"
+    2>&1 | grep "ERROR" | head -3 > "${RESULTS_BASE}/test16_guard.log"
 
-if grep -q "input_metatranscriptome" "${RESULTS_BASE}/test14_guard.log"; then
+if grep -q "input_metatranscriptome" "${RESULTS_BASE}/test16_guard.log"; then
     echo "[PASS] mgx_mtx two-input guard fires"
     ((pass++))
 else

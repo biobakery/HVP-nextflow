@@ -42,12 +42,15 @@ Select a workflow with `--workflow`:
 | `mtx` | ✅ Ready | Whole metatranscriptome shotgun: QC + taxonomy + function |
 | `16s` | 🔜 Stub | 16S amplicon (DADA2 / QIIME2 planned) |
 | `vis` | ✅ Ready *(standalone)* | Visualization report — QC, taxonomy, ordination, heatmaps, pathways/ECs (matches `biobakery_workflows vis`, v3.2) |
-| `stats` | ✅ Ready *(standalone)* | Statistics — feature tables, mantel, MaAsLin2, HAllA, stratified pathways, beta diversity / PERMANOVA (matches `biobakery_workflows stats`, v3.2) |
+| `stats` | ✅ Ready | Statistics — feature tables, mantel, MaAsLin2, HAllA, stratified pathways, beta diversity / PERMANOVA (matches `biobakery_workflows stats`, v3.2) |
 
 `vis` and `stats` take a **folder** of bioBakery output rather than channels, exactly
 as their AnADAMA counterparts do, so they run standalone against the output of any
-bioBakery run. Chaining them automatically onto the end of `mgx` is **not yet wired**
-— `--run_vis` / `--run_stats` exist but only apply once that lands. See
+bioBakery run. `vis` also runs at the end of `mgx`, `mtx` and `mgx_mtx` by default, over
+a bioBakery-standard folder built from that run's own channels — turn that off with
+`--run_vis false`, and see use case 14. Chaining `stats` is opt-in
+(`--run_stats true` plus `--input_metadata`), because it needs a study large enough
+for its analyses to fit. See
 [docs/vis_stats_port_status.md](docs/vis_stats_port_status.md) for the full port
 status, the upstream defects worked around, and the remaining work.
 
@@ -486,6 +489,54 @@ Skip the expensive stages with `--stats_bypass_maaslin` / `--stats_bypass_halla`
 > handled — the `halla` process loads `rocky8/halla/0.8.20` via its own `beforeScript`.
 > On other profiles, give that process an environment with HAllA and numpy 1.x.
 
+### 14. Reports at the end of a read-based run (chained `vis` / `stats`)
+
+`mgx`, `mtx` and `mgx_mtx` finish by running vis over their own results.
+Nothing extra is needed; pass metadata to get the metadata-driven figures:
+
+```sh
+nextflow run main.nf -profile harvard_rc \
+  --readsdir       /path/to/fastqs \
+  --outdir         results \
+  --input_metadata /path/to/metadata.tsv
+```
+
+Turn it off with `--run_vis false`.
+
+**stats is opt-in** (`--run_stats true`, plus `--input_metadata`). It is a
+study-level analysis rather than a report: MaAsLin2, HAllA and the mantel test
+need enough samples to fit anything, and on a small study they fail — which,
+chained, would take down an otherwise complete profiling run at its last step.
+With `--run_stats true` but no metadata it is skipped with a warning rather
+than failing.
+
+The reports are not built from `results/` on disk. A `stage_report_input` step
+assembles a bioBakery-standard folder from the run's own output channels —
+`metaphlan/merged/metaphlan_taxonomic_profiles.tsv`,
+`kneaddata/merged/kneaddata_read_count_table.tsv`,
+`humann/merged/*.tsv`, `humann/counts/*.tsv` — which is what `files.ShotGun`
+looks for by name. Two reasons:
+
+- `publishDir` is asynchronous, so a step reading `--outdir` mid-run is a race.
+- This pipeline's own published names and locations differ from the bioBakery
+  layout, so a report pointed at `--outdir` finds only the files that can be
+  identified from their contents, and loses its QC read-count, HUMAnN
+  read-count and feature-count sections.
+
+`mgx_mtx` reports on its **metagenome half**. `files.ShotGun` looks for each
+file at a fixed path and does not walk subdirectories, so a folder holding two
+assays is not something vis can read — upstream `biobakery_workflows vis` takes
+one assay's output folder too. Report on the other half with
+`--workflow vis --vis_input <outdir>/whole_metatranscriptome_shotgun`.
+
+A chained report that fails does **not** fail the run: the profiles and tables
+are already written, and vis and stats legitimately fail on a study too small or
+too sparse to visualise. The failure is reported in the log. A standalone
+`--workflow vis|stats` run is unaffected — there the report is the run.
+
+The staged folder is published as `<outdir>/report_input/`, so you can see what
+the report was built from, and point a later standalone run straight at it.
+
 ---
 
 ## All Parameters
@@ -515,8 +566,8 @@ Skip the expensive stages with `--stats_bypass_maaslin` / `--stats_bypass_halla`
 | `--run_functional_profiling` | `true` | Run HUMAnN |
 | `--run_viral_profiling` | `false` | Run BAQLaVa viral profiling |
 | `--run_strain_profiling` | `false` | Run StrainPhlAn SGB mode |
-| `--run_vis` | `true` | Run `vis` at the end of a read-based workflow. **Reserved — chaining is not wired yet**; use `--workflow vis`. |
-| `--run_stats` | `true` | Run `stats` at the end of a read-based workflow. **Reserved — chaining is not wired yet**; use `--workflow stats`. |
+| `--run_vis` | `true` | Run `vis` at the end of `mgx` / `mtx` / `mgx_mtx` |
+| `--run_stats` | `false` | Run `stats` at the end of `mgx` / `mtx` / `mgx_mtx`; needs `--input_metadata` and a study large enough for MaAsLin2/HAllA |
 
 ### QC options (KneadData)
 
@@ -750,6 +801,8 @@ results/
 │   └── pipeline_dag_YYYY-MM-DD_HH-mm-ss.svg
 │
 ├── kneaddata/                                     # (run_qc=true)
+│   ├── merged/
+│   │   └── kneaddata_read_count_table.tsv         # reads surviving each QC step
 │   ├── ${SAMPLE}_kneaddata.log
 │   ├── ${SAMPLE}_kneaddata_paired_1.fastq.gz      # (paired-end only)
 │   ├── ${SAMPLE}_kneaddata_paired_2.fastq.gz
@@ -762,7 +815,9 @@ results/
 │   │   └── ${SAMPLE}_bowtie2_${INDEX}.tsv         # bowtie2 alignment stats
 │   ├── bzip/
 │   │   └── ${SAMPLE}_${INDEX}.sam.bz2             # compressed SAM (used by StrainPhlAn)
-│   └── merged_metaphlan_profiles.tsv              # all samples merged
+│   ├── merged_metaphlan_profiles.tsv              # all samples merged
+│   └── merged/
+│       └── metaphlan_species_counts_table.tsv     # species called per sample
 │
 ├── humann/                                        # (run_functional_profiling=true)
 │   └── ${H_VERSION}/
@@ -773,10 +828,14 @@ results/
 │       │   └── ${SAMPLE}_${GROUPING}_${H_VERSION}.tsv
 │       ├── rename/                                # (run_humann_rename=true)
 │       │   └── ${SAMPLE}_${GROUPING}_named_${H_VERSION}.tsv
-│       └── merged/                               # (run_humann_merge=true)
-│           ├── merged_genefamilies_${H_VERSION}.tsv
-│           ├── merged_pathabundance_${H_VERSION}.tsv
-│           └── merged_pathcoverage_${H_VERSION}.tsv
+│       ├── merged/                               # (run_humann_merge=true)
+│       │   ├── merged_genefamilies_${H_VERSION}.tsv
+│       │   ├── merged_pathabundance_${H_VERSION}.tsv
+│       │   └── merged_pathcoverage_${H_VERSION}.tsv
+│       └── counts/
+│           ├── humann_${FEATURE}_relab_counts.tsv     # features above zero, per sample
+│           ├── humann_feature_counts.tsv              # the three feature types in one table
+│           └── humann_read_and_species_count_table.tsv  # from the HUMAnN logs
 │
 ├── baqlava/                                       # (run_viral_profiling=true)
 │   └── ${SAMPLE}_baqlava/
@@ -850,30 +909,61 @@ sbatch test/submit_tests.sh
 | Test | Workflow | Layout | Covers |
 |---|---|---|---|
 | 1 | mgx | single | version log only, local executor |
-| 2 | mgx | single | KneadData + MetaPhlAn + HUMAnN |
-| 3 | mgx | paired | KneadData + MetaPhlAn + HUMAnN |
+| 2 | mgx | single | KneadData + MetaPhlAn + HUMAnN + chained report staging; `--run_stats true` without metadata skips cleanly |
+| 3 | mgx | paired | the same, with metadata |
 | 4 | mgx | paired | `--run_qc false`, i.e. pair merging |
 | 5 | mtx | single | KneadData with the 3 metatranscriptome databases |
 | 6 | mtx | paired | KneadData with the 3 metatranscriptome databases |
-| 7 | mgx_mtx | paired | mapping file, both halves, RNA/DNA ratio |
+| 7 | mgx_mtx | paired | mapping file, both halves, RNA/DNA ratio, chained report staging |
 | 8 | mgx_mtx | single | no mapping file, each half profiled separately |
-| 9 | assembly | single | MEGAHIT → MetaBAT2 → CheckM2 → PhyloPhlAn → SGB |
-| 10 | assembly | paired | same |
+| 9 | assembly | single | every stage runs on the bundled reads (no MAGs — see below) |
+| 10 | assembly | paired | the same |
 | 11 | vis | — | report from a bioBakery output folder |
 | 12 | stats | — | MaAsLin2 / HAllA / mantel / beta diversity + report |
-| 13-14 | — | — | the toggle and two-input guards |
+| 13 | assembly | paired | simulated reads: contigs → bins → CheckM2 → PhyloPhlAn → SGBs → profile |
+| 14 | assembly | single | the same |
+| 15-16 | — | — | the toggle and two-input guards |
 
 The drivers run in parallel, each with its own launch and work directory; logs
 and outputs land in `test/results/<test name>{.log,/}`.
 
-Tests 11 and 12 need a bioBakery-output fixture, which is generated rather than
-committed (it is too large, and reproducible from a seed). They are skipped with
-a message if it is absent. Point `VIS_STATS_FIXTURE` at it, or leave it at the
-default `~/biobakery_vis_stats_test/input` and regenerate it with:
+Two fixtures live outside the repository, because they are large and
+reproducible from a seed rather than worth committing. Tests that need one are
+skipped with a message when it is absent.
+
+**vis / stats** (tests 11-12) — a bioBakery-output folder. Point
+`VIS_STATS_FIXTURE` at it, or leave the default and regenerate:
 
 ```sh
 python ~/biobakery_vis_stats_test/make_fixture.py --output input
 ```
+
+**assembly** (tests 13-14) — reads simulated from two real genomes
+(*Akkermansia muciniphila* and *Limosilactobacillus reuteri*), as two samples
+with the mixture reversed so MetaBAT2 has differential coverage to bin on.
+Point `ASSEMBLY_FIXTURE` at the folder holding `input_pe/` and `input_se/`, or
+leave the default and regenerate:
+
+```sh
+cd ~/biobakery_assembly_test
+python3 make_fixture.py --output input_pe            # ~620k read pairs
+python3 make_fixture.py --output input_se --single
+```
+
+The generator downloads the two genomes once (about 1.3 MB) and caches them;
+everything after that is deterministic given `--seed`.
+
+The chained reports are asserted through `<outdir>/report_input/` — the
+bioBakery-layout folder they are built from — not through the report itself:
+two samples of a thousand reads cannot produce an ordination or a heatmap, so
+vis legitimately fails on this data, and that failure is ignored by design. A
+report with real content needs a real study.
+
+Tests 9 and 10 stay on the bundled reads deliberately: those are host-dominated
+enough that KneadData leaves about a thousand per sample, so MEGAHIT assembles
+nothing, and they check that every stage runs and that the no-MAG path still
+reaches a final profile. Tests 13 and 14 are the ones that exercise binning,
+CheckM2, PhyloPhlAn and SGB clustering on actual MAGs.
 
 ### Unit tests
 
@@ -907,6 +997,7 @@ biobakery-nextflow/
 │   └── stats.nf                         # Statistics
 ├── subworkflows/
 │   ├── read_input.nf                    # input channel + per-sample layout detection
+│   ├── reporting.nf                     # chained vis/stats at the end of a read run
 │   ├── quality_control.nf               # KneadData (single + paired routing)
 │   ├── taxonomic_profiling.nf           # MetaPhlAn + bzip + merge
 │   ├── functional_profiling.nf          # HUMAnN + regroup + rename + merge
@@ -934,6 +1025,7 @@ biobakery-nextflow/
 │       ├── humann_rename/main.nf
 │       ├── mash/main.nf                 # sketch + paste + dist + sgb_cluster + merge_tax
 │       ├── merge_pairs/main.nf          # concatenate a pair when QC is bypassed
+│       ├── report_input/main.nf         # build the bioBakery folder vis/stats read
 │       └── version_log/main.nf
 ├── conf/
 │   ├── base.config                      # Default resources + check_max()
