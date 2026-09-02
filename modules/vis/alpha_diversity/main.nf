@@ -21,7 +21,7 @@ process alpha_diversity {
 
     script:
     """
-    Rscript \$(python -c "import biobakery_bootstrap; print(biobakery_bootstrap.get_rscript('alpha_diversity'))") \\
+    Rscript \$(python ${projectDir}/bin/scripts/biobakery_bootstrap.py --rscript alpha_diversity) \\
         ${features} \\
         ${metadata} \\
         alpha_diversity_plots \\

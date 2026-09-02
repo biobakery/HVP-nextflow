@@ -30,7 +30,7 @@ process beta_diversity {
     else if (analysis == 'pairwise')
         analysis_opt = '--pairwise TRUE'
     """
-    Rscript \$(python -c "import biobakery_bootstrap; print(biobakery_bootstrap.get_rscript('beta_diversity'))") \\
+    Rscript \$(python ${projectDir}/bin/scripts/biobakery_bootstrap.py --rscript beta_diversity) \\
         ${features} \\
         ${metadata} \\
         ${feature_type}_${analysis}.png \\
@@ -56,7 +56,7 @@ process permanova {
     script:
     def input_files = features.collect { it.toString() }.join(',')
     """
-    Rscript \$(python -c "import biobakery_bootstrap; print(biobakery_bootstrap.get_rscript('permanova_hmp2'))") \\
+    Rscript \$(python ${projectDir}/bin/scripts/biobakery_bootstrap.py --rscript permanova_hmp2) \\
         '${input_files}' \\
         ${metadata} \\
         permanova.png \\

@@ -142,3 +142,24 @@ def remove_render_temp_dirs(folder):
         except OSError:
             # not empty, or gone already -- either way, leave it alone
             pass
+
+
+if __name__ == "__main__":
+    # Command-line resolver, so a process can locate an R script without having
+    # bin/scripts on PYTHONPATH:
+    #
+    #   Rscript $(python .../biobakery_bootstrap.py --rscript alpha_diversity)
+    #
+    # Running this file by path puts its own directory on sys.path, which a
+    # `python -c "import biobakery_bootstrap"` one-liner does not: that form
+    # worked only in the hand-run environment, whose PYTHONPATH included
+    # bin/scripts, and failed under every profile.
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--rscript", help="print the path of this R script")
+    group.add_argument("--template", help="print the path of this .pmd template")
+    args = parser.parse_args()
+
+    print(get_rscript(args.rscript) if args.rscript else get_template(args.template))

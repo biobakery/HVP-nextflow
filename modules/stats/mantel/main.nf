@@ -19,7 +19,7 @@ process mantel_test {
     script:
     def input_files = features.collect { it.toString() }.join(',')
     """
-    Rscript \$(python -c "import biobakery_bootstrap; print(biobakery_bootstrap.get_rscript('mantel_test'))") \\
+    Rscript \$(python ${projectDir}/bin/scripts/biobakery_bootstrap.py --rscript mantel_test) \\
         ${metadata} \\
         '${input_files}' \\
         mantel_plot.png \\
