@@ -1,9 +1,9 @@
 # vis / stats port status — v0.0.4
 
-Working notes for the port of `biobakery_workflows vis` and `stats` (3.2, AnADAMA2)
-to Nextflow. Nothing here has been pushed to GitHub and nothing has been deployed
-to `lab_storage`. Everything below is local, on branch
-`feature/standard-biobakery-workflow`.
+Working notes for the port of `biobakery_workflows vis` and `stats` (3.2,
+AnADAMA2) to Nextflow, on branch `feature/standard-biobakery-workflow`. The tree
+is deployed to `lab_storage` as `rocky8/biobakery-workflows-nextflow/0.0.4`; the
+commits behind it are not yet pushed to GitHub.
 
 Reference implementation being ported:
 `/n/lab_storage/huttenhower_lab/tools/biobakery_workflows/rocky8/v3.2/lib/python3.10/site-packages/biobakery_workflows/`
