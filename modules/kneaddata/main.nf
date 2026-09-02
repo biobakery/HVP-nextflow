@@ -96,3 +96,27 @@ process paired_end_kneaddata {
         > ${sample}_concatenated.fastq.gz
     """
 }
+
+// Compile the per-sample KneadData logs into one read count table.
+//
+// Ports shotgun.kneaddata_read_count_table (tasks/shotgun.py:165). The table is
+// what the vis report's quality control section is built from, and
+// files.ShotGun looks for it by name under kneaddata/merged, so it is published
+// there rather than beside the logs.
+process kneaddata_read_counts {
+    publishDir path: { "${params.outdir}/${subdir}kneaddata/merged" }, mode: 'copy'
+
+    input:
+    path logs, stageAs: 'logs/*'
+    val subdir
+
+    output:
+    path "kneaddata_read_count_table.tsv", emit: counts
+
+    script:
+    """
+    kneaddata_read_count_table \\
+        --input logs \\
+        --output kneaddata_read_count_table.tsv
+    """
+}

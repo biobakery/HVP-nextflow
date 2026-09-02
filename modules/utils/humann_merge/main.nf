@@ -93,3 +93,27 @@ process humann_feature_counts_merge {
         --file_name _relab_counts.tsv
     """
 }
+
+// Read and species counts, taken from the per-sample HUMAnN logs.
+//
+// Ports the humann_count_alignments_species task of
+// shotgun.functional_profile (tasks/shotgun.py:533). The vis report's HUMAnN
+// read-count section is built from this, and files.ShotGun looks for it by name
+// under humann/counts.
+process humann_log_counts {
+    publishDir path: { "${params.outdir}/${subdir}humann/${params.humann_version}/counts" }, mode: 'copy'
+
+    input:
+    path logs, stageAs: 'logs/*'
+    val subdir
+
+    output:
+    path "humann_read_and_species_count_table.tsv", emit: counts
+
+    script:
+    """
+    get_counts_from_humann_logs.py \\
+        --input logs \\
+        --output humann_read_and_species_count_table.tsv
+    """
+}

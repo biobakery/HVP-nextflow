@@ -77,3 +77,29 @@ process metaphlan_merge {
     merge_metaphlan_tables.py $profiles > merged_metaphlan_profiles.tsv
     """
 }
+
+// Count the species called in each sample, from the merged profile.
+//
+// Ports the metaphlan_count_species task of shotgun.taxonomic_profile
+// (tasks/shotgun.py:375). files.ShotGun looks for this by name under
+// metaphlan/merged, and the vis report reads it for the species-count section.
+process metaphlan_species_counts {
+    publishDir path: { "${params.outdir}/${subdir}metaphlan/merged" }, mode: 'copy'
+
+    input:
+    path merged_profile
+    val subdir
+
+    output:
+    path "metaphlan_species_counts_table.tsv", emit: counts
+
+    script:
+    """
+    count_features.py \\
+        --input ${merged_profile} \\
+        --output metaphlan_species_counts_table.tsv \\
+        --include s__ \\
+        --filter t__ \\
+        --reduce-sample-name
+    """
+}

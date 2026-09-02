@@ -10,6 +10,7 @@ include { humann_join }                from '../modules/utils/humann_merge/main.
 include { humann_join as humann_join_relab } from '../modules/utils/humann_merge/main.nf'
 include { humann_count_features }      from '../modules/utils/humann_merge/main.nf'
 include { humann_feature_counts_merge } from '../modules/utils/humann_merge/main.nf'
+include { humann_log_counts }          from '../modules/utils/humann_merge/main.nf'
 
 // Functional profiling subworkflow: HUMAnN, then the three feature types
 // (gene families, ECs, pathway abundances) through merge → renormalise →
@@ -67,6 +68,12 @@ workflow FUNCTIONAL_PROFILING {
     feature_counts_out = humann_feature_counts_merge(
         counts_out.counts.map { label, f -> f }.collect(), subdir)
 
+    // Read and species counts, from the per-sample logs. The log is an optional
+    // HUMAnN output, so the filter skips the step rather than running it on an
+    // empty folder when no sample produced one.
+    log_counts_out = humann_log_counts(
+        humann_out.log.map { sample, l -> l }.collect().filter { it.size() > 0 }, subdir)
+
     // Pick the individual merged tables back out of the keyed channel. These
     // are the RPK tables, which is what the RNA/DNA ratio in mgx_mtx needs.
     merged_genefamilies_ch  = merged_out.merged.filter { label, f -> label == 'genefamilies'  }.map { label, f -> f }
@@ -87,4 +94,12 @@ workflow FUNCTIONAL_PROFILING {
     // merged relative abundance tables
     merged_relab         = merged_relab_out.merged
     feature_counts       = feature_counts_out.feature_counts
+    log_counts           = log_counts_out.counts
+    // Everything a bioBakery-standard report folder wants from HUMAnN, as flat
+    // channels of files: see modules/utils/report_input.
+    merged_tables = merged_out.merged.map { label, f -> f }
+        .mix( merged_relab_out.merged.map { label, f -> f } )
+    count_tables  = counts_out.counts.map { label, f -> f }
+        .mix( feature_counts_out.feature_counts )
+        .mix( log_counts_out.counts )
 }

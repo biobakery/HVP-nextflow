@@ -3,6 +3,7 @@ nextflow.enable.dsl=2
 
 include { single_end_kneaddata } from '../modules/kneaddata/main.nf'
 include { paired_end_kneaddata } from '../modules/kneaddata/main.nf'
+include { kneaddata_read_counts } from '../modules/kneaddata/main.nf'
 
 // Quality control subworkflow: host decontamination + trimming via KneadData
 workflow QUALITY_CONTROL {
@@ -44,6 +45,10 @@ workflow QUALITY_CONTROL {
     all_cleaned = cleaned_paired.mix(cleaned_single)
     all_logs    = paired_out.log.mix(single_out.log)
 
+    // One read count table for the run, which is what the vis report's quality
+    // control section reads.
+    read_counts_out = kneaddata_read_counts(all_logs.map { sample, l -> l }.collect(), subdir)
+
     // The four separate KneadData outputs, for consumers that need the pairing
     // rather than the concatenated file: assembly runs MEGAHIT in paired mode
     // (-1/-2 plus the unmatched reads as single-end), matching the anadama2
@@ -59,6 +64,7 @@ workflow QUALITY_CONTROL {
     // named "logs", not "log": Nextflow already binds "log" to its own logger,
     // so emitting that name fails at runtime with "No such variable: log"
     logs  = all_logs
+    read_counts = read_counts_out.counts
     // Channel: [ sample, [paired_1, paired_2, unmatched_1, unmatched_2] ]
     paired_reads = paired_parts
 }
