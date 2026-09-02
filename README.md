@@ -27,6 +27,7 @@
 9. [Changing Resources](#changing-resources)
 10. [Output Structure](#output-structure)
 11. [Testing](#testing)
+12. [Project Status](#project-status)
 
 ---
 
@@ -41,7 +42,7 @@ Select a workflow with `--workflow`:
 | `mgx_mtx` | ✅ Ready | Paired metagenome + metatranscriptome, joined by the RNA/DNA ratio (matches `biobakery_workflows wmgx_wmtx`, v3.2) |
 | `mtx` | ✅ Ready | Whole metatranscriptome shotgun: QC + taxonomy + function |
 | `16s` | 🔜 Stub | 16S amplicon (DADA2 / QIIME2 planned) |
-| `vis` | ✅ Ready *(standalone)* | Visualization report — QC, taxonomy, ordination, heatmaps, pathways/ECs (matches `biobakery_workflows vis`, v3.2) |
+| `vis` | ✅ Ready | Visualization report — QC, taxonomy, ordination, heatmaps, pathways/ECs (matches `biobakery_workflows vis`, v3.2) |
 | `stats` | ✅ Ready | Statistics — feature tables, mantel, MaAsLin2, HAllA, stratified pathways, beta diversity / PERMANOVA (matches `biobakery_workflows stats`, v3.2) |
 
 `vis` and `stats` take a **folder** of bioBakery output rather than channels, exactly
@@ -979,6 +980,42 @@ nextflow run main.nf -profile harvard_rc -params-file template-params.yaml
 ```
 
 CI runs automatically on every push via `.github/workflows/ci-tests.yml`.
+
+---
+
+## Project Status
+
+The port from `biobakery_workflows` 3.2 (AnADAMA2) is **feature complete except
+16s**. Every workflow below is verified on the real tool stack for single-end
+and paired-end input by `test/run_tests.sh` — 39 checks over 16 cases, all
+green as of 2026-09-02.
+
+### Complete
+
+| Area | What works |
+|---|---|
+| `mgx` | QC → taxonomy → function, both layouts, plus optional BAQLaVa and StrainPhlAn |
+| `mtx` | the same on the metatranscriptome database set (host genome + host mRNA + rRNA) |
+| `mgx_mtx` | both halves profiled and published separately, joined by the RNA/DNA relative expression ratio; with a mapping file the RNA samples reuse the DNA taxonomic profiles |
+| `assembly` | MEGAHIT → MetaBAT2 → CheckM2 → PhyloPhlAn → Mash/SGB clustering → per-sample MAG abundance → merged profile |
+| `vis` | the full report, standalone or chained onto a read-based run |
+| `stats` | mantel, MaAsLin2 (+ figure tiles), HAllA, stratified pathway barplots, beta diversity / PERMANOVA, report and archive |
+| Layout handling | detected per sample from the filenames; `--single_end` / `--paired_end false` force single-end; a folder mixing both works |
+| QC bypass | `--run_qc false` merges each pair first, as `shotgun.merge_pairs` does upstream |
+| Chained reports | built from the run's own channels into a bioBakery-standard folder (`<outdir>/report_input/`), so there is no `publishDir` race and no layout mismatch |
+| Environments | every process has resource and module blocks for `-profile harvard_rc`; HAllA gets its own module, because it pins `numpy<2` |
+| Deployment | `hutlab load rocky8/biobakery-workflows-nextflow/0.0.4`, verified end to end with the shipped params file |
+
+### Not done
+
+| Item | Notes |
+|---|---|
+| `16s` | still a stub — `--workflow 16s` errors. DADA2 / QIIME2 planned |
+| Parity diff against upstream 3.2 | no section-by-section comparison of the vis/stats output yet. It needs a fresh upstream run first, and upstream 3.2 cannot itself complete a `stats` run on a standard wmgx folder (see [docs/vis_stats_port_status.md](docs/vis_stats_port_status.md), decision 6), so it has to be section by section rather than a diff |
+| `--report_format pdf` | not exercised since the report links were made relative |
+| Chained `stats` at scale | the chained path is wired and covered for `vis`; chained `stats` needs a study large enough for its analyses to fit, which the test data is not. Standalone `stats` is covered |
+| MAG-level assembly test data | tests 13-14 use simulated reads from two genomes. Real multi-species data would exercise SGB clustering harder |
+| Non-FASRC profiles | `tufts_hpc`, `aws` and `local` carry no module or resource blocks for the vis/stats and report-staging processes; only `harvard_rc` is complete |
 
 ---
 
