@@ -12,6 +12,8 @@ include { STRAIN_PROFILING }                               from '../subworkflows
 include { rna_dna_norm }                                   from '../modules/utils/rna_dna_norm/main.nf'
 include { version_log }                                    from '../modules/utils/version_log/main.nf'
 include { mtx_kneaddata_dbs }                              from '../subworkflows/mtx_common.nf'
+include { merge_pairs as MERGE_MGX }                       from '../modules/utils/merge_pairs/main.nf'
+include { merge_pairs as MERGE_MTX }                       from '../modules/utils/merge_pairs/main.nf'
 
 // Paired whole metagenome + metatranscriptome workflow.
 // Ported from biobakery_workflows 3.2 workflows/wmgx_wmtx.py.
@@ -51,8 +53,21 @@ workflow MGX_MTX {
         mgx_clean = QC_MGX.out.reads
         mtx_clean = QC_MTX.out.reads
     } else {
-        mgx_clean = mgx_reads
-        mtx_clean = mtx_reads
+        // Upstream bypasses quality control by merging each pair into one file
+        // (shotgun.merge_pairs); MetaPhlAn and HUMAnN take a single input file
+        // per sample, so handing them the two raw mates passed the second one
+        // as a positional argument. Single-end samples pass straight through.
+        merged_mgx = MERGE_MGX(
+            mgx_reads.filter { meta, r -> meta.paired_end }.map { meta, r -> tuple(meta.id, r) }
+        ).merged.map { s, f -> [ [id: s, paired_end: true], f ] }
+
+        mgx_clean = merged_mgx.mix( mgx_reads.filter { meta, r -> !meta.paired_end } )
+
+        merged_mtx = MERGE_MTX(
+            mtx_reads.filter { meta, r -> meta.paired_end }.map { meta, r -> tuple(meta.id, r) }
+        ).merged.map { s, f -> [ [id: s, paired_end: true], f ] }
+
+        mtx_clean = merged_mtx.mix( mtx_reads.filter { meta, r -> !meta.paired_end } )
     }
 
     if (!params.run_taxonomic_profiling) {

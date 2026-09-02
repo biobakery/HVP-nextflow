@@ -8,6 +8,7 @@ include { FUNCTIONAL_PROFILING } from '../subworkflows/functional_profiling.nf'
 include { STRAIN_PROFILING }     from '../subworkflows/strain_profiling.nf'
 include { version_log }          from '../modules/utils/version_log/main.nf'
 include { mtx_kneaddata_dbs }    from '../subworkflows/mtx_common.nf'
+include { merge_pairs }          from '../modules/utils/merge_pairs/main.nf'
 
 // Whole Metatranscriptome (MTX) workflow.
 //
@@ -31,7 +32,15 @@ workflow MTX {
         QUALITY_CONTROL(read_ch, mtx_kneaddata_dbs(), '')
         cleaned = QUALITY_CONTROL.out.reads
     } else {
-        cleaned = read_ch
+        // Upstream bypasses quality control by merging each pair into one file
+        // (shotgun.merge_pairs); MetaPhlAn and HUMAnN take a single input file
+        // per sample, so handing them the two raw mates passed the second one
+        // as a positional argument. Single-end samples pass straight through.
+        merged_pairs = merge_pairs(
+            read_ch.filter { meta, r -> meta.paired_end }.map { meta, r -> tuple(meta.id, r) }
+        ).merged.map { s, f -> [ [id: s, paired_end: true], f ] }
+
+        cleaned = merged_pairs.mix( read_ch.filter { meta, r -> !meta.paired_end } )
     }
 
     // ── Taxonomic profiling (MetaPhlAn) ───────────────────────────────────
