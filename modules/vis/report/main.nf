@@ -15,9 +15,14 @@ process vis_report {
     input:
     path input_folder, stageAs: 'input_folder'
     path manifest
-    path metadata
-    path alpha_diversity_plots
-    path ecs_file
+    // Each optional input is staged under its own name. All three fall back to
+    // the same assets/NO_FILE sentinel, and staging two of them at once failed
+    // the task with "multiple input files for each of the following file names:
+    // NO_FILE" -- which is every run without metadata, since alpha diversity is
+    // then skipped too.
+    path metadata,              stageAs: 'metadata/*'
+    path alpha_diversity_plots, stageAs: 'alpha/*'
+    path ecs_file,              stageAs: 'ecs/*'
 
     output:
     path "vis",                    emit: report_folder

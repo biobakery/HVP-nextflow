@@ -79,6 +79,13 @@ top_taxonomy, top_data = utilities.top_rows(species_taxonomy, species_data, vars
 top_clustered_taxonomy, top_clustered_data = utilities.top_rows(species_clustered_taxonomy, species_clustered_data, vars["max_sets_heatmap"], function="average")
 
 pcoa_data=numpy.array(species_data)/100.0
+# Bind the caption before the call. pweave catches an exception inside a chunk,
+# prints it into the report and carries on, but the inline "<%= caption %>"
+# below then raises NameError and kills the whole render. show_pcoa does raise
+# on a study too small or too sparse to ordinate -- "float division by zero", or
+# its samples-as-columns check -- which is exactly when losing the entire report
+# is the worst outcome.
+caption=""
 caption=document.show_pcoa(samples,species_taxonomy,pcoa_data,"PCoA ordination of species abundance using Bray-Curtis dissimilarity",outfilename=os.path.join(document.figures_folder,"pcoa_species.png"))
 ```
 
@@ -97,6 +104,7 @@ top_taxonomy_genera, top_data_genera = utilities.top_rows(genera_taxonomy, gener
 top_clustered_taxonomy_genera, top_clustered_data_genera = utilities.top_rows(genera_clustered_taxonomy, genera_clustered_data, vars["max_sets_heatmap"], function="average")
 
 pcoa_data_genera=numpy.array(genera_data)/100.0
+caption_genera=""   # see the note on caption above
 caption_genera=document.show_pcoa(samples,genera_taxonomy,pcoa_data_genera, "PCoA ordination of genera abundance using Bray-Curtis dissimilarity",feature_types="genera",outfilename=os.path.join(document.figures_folder,"pcoa_genera.png"))
 ```
 
