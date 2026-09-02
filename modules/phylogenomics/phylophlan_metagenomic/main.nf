@@ -50,7 +50,10 @@ process phylophlan_merge {
     publishDir "${params.outdir}/phylophlan", mode: 'copy'
 
     input:
-    path placements  // collected phylophlan_out.tsv files
+    // Every sample's placement is called phylophlan_out.tsv, and so is this
+    // process's own output; stageAs both separates the inputs from each other
+    // and keeps the glob below from picking the partial output up.
+    path placements, stageAs: 'placement_*.tsv'  // collected per-sample placements
 
     output:
     path "phylophlan_out.tsv",    emit: merged
@@ -67,7 +70,7 @@ process phylophlan_merge {
     # Capture the input list before writing anything: the output is also a .tsv
     # in this directory, so re-globbing mid-merge picks the partial output up as
     # one of its own inputs and duplicates every row.
-    ls *.tsv | sort > .phylophlan_inputs.txt
+    ls placement_*.tsv | sort > .phylophlan_inputs.txt
     first=\$(head -1 .phylophlan_inputs.txt)
     cat "\$first" > merged_tmp.tsv
     tail -n +2 .phylophlan_inputs.txt | while read -r f; do

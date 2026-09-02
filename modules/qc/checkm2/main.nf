@@ -36,7 +36,9 @@ process checkm2_merge {
     publishDir "${params.outdir}/checkm", mode: 'copy'
 
     input:
-    path reports  // collected quality_report.tsv files
+    // CheckM2 names every sample's report quality_report.tsv -- see the note on
+    // mag_n50 below.
+    path reports, stageAs: 'quality_report_*.tsv'  // collected per-sample reports
 
     output:
     path "merged_quality_report.tsv", emit: merged
@@ -46,7 +48,7 @@ process checkm2_merge {
     # Capture the input list first: the output is also a .tsv here, so a later
     # glob can pick the partial output up as one of its own inputs. It happens to
     # be safe today only because "merged_" sorts before the staged input names.
-    ls *.tsv | sort > .checkm2_inputs.txt
+    ls quality_report_*.tsv | sort > .checkm2_inputs.txt
     head -1 \$(head -1 .checkm2_inputs.txt) > merged_quality_report.tsv
     for f in \$(cat .checkm2_inputs.txt); do
         tail -n +2 "\$f" >> merged_quality_report.tsv
@@ -59,7 +61,11 @@ process mag_n50 {
     publishDir "${params.outdir}/checkm/n50", mode: 'copy'
 
     input:
-    path bins_dirs  // collected bins/ directories from all samples
+    // Every sample's directory is called "bins", so staging them under their own
+    // names collides as soon as there is more than one sample. stageAs numbers
+    // them; mag_n50_calc.py walks the whole input tree for *.fa, and the bin
+    // files inside are already sample-prefixed.
+    path bins_dirs, stageAs: 'bins_*'  // collected bins/ directories from all samples
 
     output:
     path "mags_n50.tsv", emit: n50

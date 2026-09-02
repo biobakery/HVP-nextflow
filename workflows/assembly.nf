@@ -40,9 +40,16 @@ workflow ASSEMBLY {
         // concatenated reads: used for alignment and depth
         cleaned_flat = QUALITY_CONTROL.out.reads.map { meta, r -> tuple(meta.id, r) }
         // MEGAHIT gets the pairing rather than the concatenated file, so it can
-        // assemble in paired mode the way the anadama2 assembly workflow does
-        assembly_input = params.paired_end ? QUALITY_CONTROL.out.paired_reads
-                                           : cleaned_flat
+        // assemble in paired mode the way the anadama2 assembly workflow does.
+        // Which samples those are comes from the channel, not params.paired_end:
+        // the layout is detected per sample in read_input, so a single-end run
+        // left params.paired_end at its default true, selected the (empty)
+        // paired channel, and the whole workflow completed having assembled
+        // nothing. Mixing the two also handles a folder with both layouts.
+        single_flat = QUALITY_CONTROL.out.reads
+            .filter { meta, r -> !meta.paired_end }
+            .map    { meta, r -> tuple(meta.id, r) }
+        assembly_input = QUALITY_CONTROL.out.paired_reads.mix(single_flat)
     } else {
         cleaned_flat   = reads.map { meta, r -> tuple(meta.id, r) }
         assembly_input = cleaned_flat
@@ -81,13 +88,13 @@ workflow ASSEMBLY {
     phylo_merged   = phylophlan_merge(all_placements)
 
     // ── Step 7: SGB clustering (Mash + R) ────────────────────────────────
-    bins_root  = bins_out.bins.map { s, b -> b.parent }.first()
-    mag_list   = mash_list_inputs(qa_n50.qa_n50, phylo_merged.relab, bins_root)
+    all_bins   = bins_out.bins.map { s, b -> b }.collect()
+    mag_list   = mash_list_inputs(qa_n50.qa_n50, phylo_merged.relab, all_bins)
     sketch     = mash_sketch(mag_list.filepaths)
     references = mash_paste(sketch.sketch)
     distances  = mash_dist(references.references, sketch.sketch)
 
-    sgbs = sgb_cluster(distances.distances, phylo_merged.relab, qa_n50.qa_n50, bins_root)
+    sgbs = sgb_cluster(distances.distances, phylo_merged.relab, qa_n50.qa_n50, mag_list.qc_bins)
 
     // ── Step 8: Per-sample MAG abundance ──────────────────────────────────
     // The anadama2 workflow computes this with CheckM coverage/profile; without
