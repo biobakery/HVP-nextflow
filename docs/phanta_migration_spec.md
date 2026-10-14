@@ -15,9 +15,17 @@ Phanta checkout is read-only: never write to it.
 `relative_taxonomic_abundance.txt`.
 
 **Out of scope for v1** — Phanta post-processing scripts, the `single_end_krak`
-prophage branch, the R merge variants, a second cloud provider, unifying the
-samplesheet and `--readsdir` input models. Ordinary single-end samples are
-supported through the main path.
+prophage branch, the R merge variants, Tufts HPC, a second cloud provider,
+unifying the samplesheet and `--readsdir` input models. Ordinary single-end
+samples are supported through the main path.
+
+**Targets, in order** — AWS Batch (`amazon`) first: it is where the baseline is
+generated. Harvard FASRC (`harvard_rc`) second, and required: it must
+reproduce the AWS baseline byte-for-byte from the same image digest. The order
+is a design input, not a schedule — every "which site first" choice below
+follows from it. AWS support is Phanta-only; the `amazon` profile is
+documented as incomplete for every other workflow, and this work does not fix
+that.
 
 ## Pinned artifacts
 
@@ -30,7 +38,14 @@ supported through the main path.
 | Phanta test reads | `http://ab_phanta.os.scg.stanford.edu/Phanta_DBs/test_dataset.tar.gz` — four `.fq.gz`, **not** in the repo |
 | Kraken2 | >= 2.1.2 (needs `--report-minimizer-data`); pin 2.1.6 |
 | Bracken, Python, pandas, numpy | Pin exact versions in the Phanta container; record what the baseline resolved to |
+| Phanta image | One digest in `public.ecr.aws`; every profile references it (convention 4) |
+| Nextflow | `24.10.4` — what `tests/run_tests.sh` pins; `manifest.nextflowVersion` is `>= 24.04.0` |
+| Java | 21 |
+| `manifest.version` | currently `0.0.4`; bump to `0.0.5` with the Phanta release |
 | Upstream fixtures | `<phanta>/testing/{classification,final_merged_outputs}/` |
+
+The two checkout paths are this machine's. Substitute a clone URL plus the
+commits above when handing off elsewhere.
 
 All database artifacts live at
 `http://ab_phanta.os.scg.stanford.edu/Phanta_DBs/`. Eight other builds exist
@@ -60,30 +75,89 @@ becomes mandatory and the staging footprint grows.
 
 ## Repository conventions
 
-Three rules, each of which has bitten this repo before:
+Five rules. The first three have bitten this repo before; the last two are
+what CI enforces.
 
-1. **Use `modules/` only.** The repo also has `processes/` (older style:
-   separate `val(sample)` and `path(...)` inputs). Do not add to it.
+1. **Every `process` lives in `modules/**/main.nf` and nowhere else.**
+   `subworkflows/` is for stages shared by more than one workflow, or a Groovy
+   helper that is a top-level `def` (like `read_input.nf`). Phanta has one
+   consumer, so its samplesheet parsing, per-sample chain, and cohort barriers
+   go directly in `workflows/phanta.nf`; split a subworkflow out only when the
+   mgx wrapper is built. Processes are lowercase snake_case, workflows
+   UPPER_SNAKE; per-sample processes carry `tag "$sample"`; publish with
+   `publishDir path: { "${params.outdir}/…" }, mode: 'copy'`.
 2. **`meta.paired_end`, never `meta.single_end`.** Subworkflows carry
    `[ [id: sample, paired_end: bool], files ]` and unwrap to a plain sample
    string at the module boundary — see
    [subworkflows/quality_control.nf](../subworkflows/quality_control.nf) lines
    31-43. An inverted boolean here silently yields an empty channel.
-3. **Phanta takes a samplesheet, not `--readsdir`.** This is a deliberate
-   second input model for this repo. Cohort aggregation needs an explicit
-   ordered sample list, which filename globbing cannot provide.
+3. **Phanta takes a samplesheet, not `--readsdir`.** This is the first
+   samplesheet in the repo: there is no `splitCsv` anywhere, and
+   `input_mapping` (mgx_mtx's TSV manifest) is the nearest precedent. Cohort
+   aggregation needs an explicit ordered sample list, which filename globbing
+   cannot provide.
+4. **Software comes from the profile, never from a shared include.**
+   [docs/dependencies.md](dependencies.md): a process runs whatever is on
+   `PATH`, and what puts it there "lives in the profile … and nowhere else".
+   One image digest, referenced three ways:
+   - `amazon`: `container = 'public.ecr.aws/<repo>@sha256:<digest>'` in each
+     Phanta `withName` block.
+   - `harvard_rc`: a `def env_phanta` at the top of the profile, following the
+     existing `def env_<stack>` pattern, whose `beforeScript` pulls that same
+     digest with Apptainer.
+   - `tufts_hpc` (deferred): `apptainer` is already enabled there; a
+     `container` directive suffices.
+   There is no `conf/phanta.config`; the config layering in
+   [nextflow.config](../nextflow.config) has no slot for one.
+5. **Every `params.phanta_*` referenced in any `.nf` has a default in
+   `conf/params.config`.** Strict mode is off, so a missing default resolves
+   to `null` and only fails when dereferenced — which is exactly when
+   `-preview` breaks CI.
+
+### CI obligations
+
+CI is tool-free by policy ([tests/README.md](../tests/README.md), "What CI
+checks"). It runs three things, and a Phanta change can fail each:
+
+- **`nextflow config -profile <p>` for every profile** — any config syntax
+  error, including in the new `conf/databases/aws.config`.
+- **`bin/check_profile_resources.py`** — fails if a profile reuses a selector
+  string that `conf/base.config` also uses and omits any of cpus/memory/time.
+  So env-only blocks in `harvard_rc.config` use a selector base does not (one
+  process per line, as the existing KneadData blocks do), and any real
+  override restates all three directives.
+- **`bin/make_diagrams.py --check`** — regenerates
+  `docs/diagrams/architecture.mmd`, `docs/diagrams/<workflow>.mmd`, and
+  `docs/workflow_reference.md` with `nextflow run -preview` and fails on any
+  byte difference. The moment `main.nf` gains a router case,
+  `architecture.mmd` changes. To pass:
+  - `workflows/phanta.nf` declares `workflow PHANTA {` at column 0 on one
+    line, with a single-line `//` comment directly above — it becomes the
+    diagram box text.
+  - `main.nf` has `case 'phanta':` with `PHANTA(` on the following line,
+    exactly that shape, and `phanta` is added to the hand-maintained
+    `default:` error string.
+  - Each process: `^process name {` at column 0, a `//` comment above it, and
+    a `publishDir` within 12 lines whose path is a double-quoted string
+    containing `${params.outdir}`.
+  - A `("phanta", "Phanta taxonomic profiling", [...])` tuple in `WORKFLOWS`
+    in `bin/make_diagrams.py`. `make_stubs()` only writes a stub reads dir and
+    a report folder — **add a `{samplesheet}` stub**, a two-row CSV pointing
+    at the stub reads, and plumb it through `render_dag`. The preview must
+    exit 0 under `-profile local` with `STUB_DBS` plus `--phanta_db
+    /stub/phanta`. Therefore the samplesheet guard checks only that the file
+    exists and parses; FASTQ and database file existence is verified inside
+    tasks, which `-preview` never runs.
+  - The three generated files are regenerated and committed in the same
+    change.
 
 ## Target layout
 
 ```text
 HVP-nextflow/
-├── main.nf                                 # Add phanta route; adjust --readsdir guard
-├── nextflow.config                         # Phanta params (Appendix B)
-├── template-params.yaml                    # Document Phanta params
-├── workflows/phanta.nf
-├── subworkflows/
-│   ├── phanta_input.nf                     # Samplesheet -> ordered channel
-│   └── phanta_profiling.nf                 # Per-sample chain + cohort barriers
+├── main.nf                                 # include PHANTA; router case; own input guard; default: string
+├── nextflow.config                         # amazon profile gains conf/databases/aws.config
+├── workflows/phanta.nf                     # Samplesheet parsing, per-sample chain, cohort barriers
 ├── modules/
 │   ├── kraken2/main.nf
 │   ├── bracken/main.nf
@@ -95,34 +169,48 @@ HVP-nextflow/
 │       ├── phanta_failed_samples/main.nf
 │       ├── phanta_prepare_counts/main.nf   # counts + total reads
 │       ├── phanta_normalize_counts/main.nf
-│       └── phanta_merge_tables/main.nf
+│       ├── phanta_merge_tables/main.nf
+│       └── version_log/main.nf             # modify: phanta_db line + params block
 ├── bin/
+│   ├── make_diagrams.py                    # modify: WORKFLOWS tuple + {samplesheet} stub
 │   ├── phanta_convert_samplesheet.py       # Legacy TSV -> CSV
 │   ├── phanta_compare_outputs.sh           # diff -r wrapper
 │   └── phanta_*.py|sh                      # Adapted CLIs (Appendix A.2)
 ├── conf/
-│   ├── base.config                         # Add Phanta withName blocks
-│   ├── phanta.config                       # Pinned container, included by every profile
-│   └── databases/<site>.config             # phanta_db + expected checksum per site
+│   ├── params.config                       # Phanta options section; phanta_db; phanta_options
+│   ├── base.config                         # Phanta withName blocks
+│   ├── harvard_rc.yaml                     # commented ### Phanta workflow section
+│   ├── tufts_hpc.yaml                      # same, plus "not set yet" note
+│   ├── profiles/
+│   │   ├── aws.config                      # Phanta blocks: container digest + queue + resources
+│   │   └── harvard_rc.config               # def env_phanta; env-only withName blocks
+│   └── databases/
+│       ├── aws.config                      # create: phanta_db + expected checksum as s3://
+│       └── harvard_rc.config               # phanta_db + expected checksum
 ├── tests/
-│   ├── phanta_workflow.nf.test
-│   ├── phanta_modules.nf.test
+│   ├── run_tests.sh                        # modify: NF/PROFILE overrides, PHANTA_ONLY, Phanta cases
 │   └── fixtures/phanta/{baseline,samplesheets,tiny_db,tiny_inputs}/
 └── docs/
+    ├── diagrams/phanta.mmd                 # generated
+    ├── workflow_reference.md               # generated
+    ├── dependencies.md                     # hand-maintained: env_phanta rows
     ├── phanta_migration_spec.md
     ├── phanta_migration_decisions.md
     └── phanta_testing.md                   # Baseline refresh + full-DB procedure
 ```
 
 `conf/base.config` already exists with `withName` blocks and `check_max` —
-extend it. `conf/databases/` already holds per-site database paths included by
-profile; `phanta_db` belongs there alongside `metaphlan_db`.
+extend it. `conf/params.config` is the single place a parameter is declared;
+`conf/databases/` holds per-site database paths included by profile. `README.md`
+and `docs/architecture.md` are hand-maintained and need a Phanta entry;
+`architecture.md` is already stale (it says `version_log` writes `versions.txt`
+— it writes `pipeline_log.txt`), so fix that while there.
 
 ## Process map
 
 | Process | Upstream rule(s) | Scope | Outputs |
 | --- | --- | --- | --- |
-| `phanta_input` (subworkflow) | sample-file parsing | cohort | Ordered sample metadata + ordered sample-ID channel |
+| samplesheet parsing (in `workflows/phanta.nf`) | sample-file parsing | cohort | Ordered sample metadata + ordered sample-ID channel |
 | `phanta_db_manifest` | — (new) | cohort, **before Kraken2** | `pipeline_info/phanta_db_manifest.txt`; fails on checksum mismatch |
 | `kraken2` | `rule kraken` | per sample | Minimizer report; `.krak` (unpublished) |
 | `phanta_filter` | `filter_kraken` + `process_filtered_kraken` | per sample | Filtered report; species table; filtering decisions; eligibility status; zero-byte substitutes when ineligible |
@@ -146,9 +234,10 @@ back into per-sample steps:
 2. `phanta_normalize_counts` needs the cohort `total_reads.tsv`.
 
 Shape: fan-out → fan-in → fan-out → fan-in → fan-out → fan-in. Implement each
-barrier in `subworkflows/phanta_profiling.nf` as an explicit `collect()` then
-`combine` back onto the per-sample channel. Assert in nf-test that each barrier
-process runs exactly once per run.
+barrier in `workflows/phanta.nf` as an explicit `collect()` then `combine` back
+onto the per-sample channel. The `run_tests.sh` barrier-cardinality case
+asserts each barrier process ran exactly once (one task directory per barrier
+process under the case's work dir).
 
 Carry `[ [id:, paired_end:], files... ]` between per-sample steps. Never
 recover sample IDs by parsing filenames. Pass an explicit ordered sample list
@@ -239,8 +328,15 @@ fails the run **before any Kraken2 task**. Set it in `conf/databases/` next to
 `phanta_db`.
 
 The manifest contains a path and timestamp, so it is not byte-stable. It lives
-in `pipeline_info/`, which the comparison excludes; assert its checksum fields
-in nf-test instead.
+in `pipeline_info/`, which the comparison excludes — Nextflow's own
+timeline/report/trace/dag files land there with launch timestamps in their
+names ([conf/reports.config](../conf/reports.config)). The `run_tests.sh`
+manifest case asserts the checksum fields with `grep` instead.
+
+`modules/utils/version_log` also publishes to `pipeline_info/`. Extend it with a
+`phanta_db:` line under its "Database Paths" banner and a Phanta params block,
+following its indent convention; otherwise Phanta settings never appear in the
+run log.
 
 ## Publishing contract
 
@@ -270,8 +366,9 @@ Three distinct operations:
    the Phanta checkout. Review and update `tests/fixtures/phanta/baseline/`. Only
    when the commit, database, tool versions, inputs, params, or ordering
    contract intentionally change.
-2. **Routine fixture regression** (CI/development) — HVP-nextflow only,
-   `diff -r` against the committed baseline. Never reruns upstream.
+2. **Routine fixture regression** (the `run_tests.sh` Phanta cases) —
+   HVP-nextflow only, `diff -r` against the committed baseline. Never reruns
+   upstream. Not in CI: CI runs no tools.
 3. **Paired-run comparison** (validating a new dataset) — upstream and
    HVP-nextflow from identical inputs, params, database, tool versions, and
    container into two directories, then `diff -r`. Do not commit the outputs.
@@ -283,50 +380,68 @@ Investigate every mismatch; no numeric tolerances.
 
 ## Work plan
 
-**16-22 engineer-days over 4-5 weeks.** Owners are roles until assigned.
+**21-30 engineer-days over 5-6 weeks.** Owners are roles until assigned.
 
-### Phase 0 — Prerequisites: container and test database (3-4 days)
+### Phase 0 — Prerequisites: container, test database, AWS groundwork (5-7 days)
 
-*Owner: pipeline engineer; container reviewed by platform engineer.*
+*Owner: pipeline engineer; container and AWS wiring reviewed by platform
+engineer.*
 
-Phases 1 and 3 cannot run without these.
+Nothing downstream runs without these, and AWS is the critical path.
 
-1. Build and publish the pinned Phanta container: Kraken2 2.1.6, Bracken,
-   exactly pinned Python/pandas/numpy. Reference it from `conf/phanta.config`,
-   included by every profile.
-2. Build a tiny Kraken2 + Bracken database for CI per [Appendix D](#appendix-d-building-the-tiny-ci-database).
-   The full database is 20-25 GB and GitHub runners have ~14 GB of disk.
+1. Build the Phanta image: Kraken2 2.1.6, Bracken, exactly pinned
+   Python/pandas/numpy. Push to `public.ecr.aws` and record the **digest**.
+   Every profile references that digest (convention 4).
+2. Build a tiny Kraken2 + Bracken database per
+   [Appendix D](#appendix-d-building-the-tiny-test-database). Its purpose: fast,
+   deterministic test runs that exercise the Bracken-ineligible path without
+   staging 25 GB. Commit it if small enough, otherwise host it and have
+   `run_tests.sh` fetch it by pinned URL plus checksum.
 3. Obtain Phanta's test reads (separate download — record URL and checksum).
    `testing/samp_file.txt` references paths absent from a fresh checkout.
-4. Establish whether CI currently passes.
-   [.github/workflows/ci-tests.yml](../.github/workflows/ci-tests.yml) runs
-   `nf-test test --ci`, and [tests/main.nf.test](../tests/main.nf.test) loads
-   `tuftshpc-params.yaml`, which needs site databases a runner lacks. If CI is
-   already red, scope the Phanta tests to run standalone.
+4. AWS groundwork, against the infrastructure handed over per "Inputs a fresh
+   agent cannot produce":
+   - Create `conf/databases/aws.config` (`phanta_db` and
+     `phanta_db_expected_inspect_sha256` as `s3://` paths) and add it to the
+     `amazon` block in [nextflow.config](../nextflow.config), matching how
+     `harvard_rc` pairs profile and databases.
+   - Add Phanta `withName` blocks to
+     [conf/profiles/aws.config](../conf/profiles/aws.config) with `container`
+     (the ECR digest), `queue`, and cpus/memory/time restated in full — the
+     selector matches base's, so `check_profile_resources.py` requires it.
+   - Replace the hardcoded `aws.batch.cliPath` with a param, or document it as
+     a site input; document that `-w s3://...` must be passed.
+   - Upload the tiny database to S3 and run one Kraken2 task against it.
+5. Database staging decision for AWS: compare ordinary S3 task localization
+   against download-once reuse on node-local NVMe, over a few Kraken2 tasks
+   with the full database. Record staging time and bytes transferred; pick the
+   simplest adequate option. Decided here because the phase 1 baseline runs on
+   whatever is chosen.
 
-**Deliverables:** published pinned container; tiny database with its build
-script and checksum; recorded test-read URL and checksum; known-good CI starting
-state.
+**Deliverables:** ECR image digest; tiny database with build script and
+checksum; recorded test-read URL and checksum; `conf/databases/aws.config`;
+Phanta blocks in `aws.config`; one Kraken2 task completed on Batch; staging
+decision with measurements.
 
-**Gate:** `kraken2` and `bracken` complete against the tiny database, in the
-pinned container, on a GitHub runner within its limits.
+**Gate:** `kraken2` and `bracken` complete against the tiny database on AWS
+Batch in the pinned image, and `nextflow config -profile amazon` plus
+`bin/check_profile_resources.py` pass.
 
-### Phase 1 — Baseline and deployment target (2-3 days)
+### Phase 1 — Baseline on AWS (2-3 days)
 
-*Owner: pipeline engineer; baseline reviewed by domain scientist; target
-confirmed with platform/data owner.*
+*Owner: pipeline engineer; baseline reviewed by domain scientist.*
 
-1. Decide which profiles Phanta supports at release — at minimum one HPC profile
-   plus `amazon`. The repo already ships `standard`/`local`, `tufts_hpc`,
-   `harvard_rc`, `amazon` (AWS Batch, S3 work dir), and legacy `engaging`. Base
-   the choice on where the FASTQs and the 25 GB database already live.
+1. Targets are fixed: AWS first, FASRC second, Tufts deferred. No decision to
+   make here — the baseline below is generated on AWS and FASRC reproduces it
+   in phase 3.
 2. Select and pin the database first. Choose one artifact, have the domain
    scientist confirm it suits HVP's sample types, compute SHA256 at download,
    record filename/checksum/date in `docs/phanta_testing.md`, and set
    `phanta_db_expected_inspect_sha256` per site.
-3. Run upstream Phanta at commit `ecbfcf9` on the test dataset, in the pinned
-   container, against the pinned database. Record commands, params, and resolved
-   tool/pandas/numpy versions. Procedure in [Appendix C](#appendix-c-running-upstream-phanta).
+3. Run upstream Phanta at commit `ecbfcf9` on the test dataset, inside the
+   pinned image on an AWS launch host, against the pinned database. Record
+   commands, params, and resolved tool/pandas/numpy versions. Procedure in
+   [Appendix C](#appendix-c-running-upstream-phanta).
 4. Run it again independently and confirm byte-identical output. If anything but
    `.krak` differs, stop and re-derive the ordering contract.
 5. Commit the reviewed outputs to `tests/fixtures/phanta/baseline/` with
@@ -336,37 +451,51 @@ confirmed with platform/data owner.*
 7. Produce and commit a tiny-database baseline so the routine regression can run
    without the full database.
 
-**Deliverables:** confirmed profile targets; pinned database filename, SHA256,
-and selection rationale; upstream revision and tool manifest including resolved
-pandas/numpy; full-database and tiny-database baselines with checksums;
-per-file ordering contract recorded; comparison wrapper with unit tests;
+**Deliverables:** pinned database filename, SHA256, and selection rationale;
+upstream revision and tool manifest including resolved pandas/numpy;
+full-database and tiny-database baselines with checksums, both generated on
+AWS; per-file ordering contract recorded; comparison wrapper with unit tests;
 baseline-refresh instructions in `docs/phanta_testing.md`.
 
 **Gate:** database pinned by checksum; two independent upstream runs
 byte-identical apart from `.krak`; a clean checkout compares fixtures without
 rerunning Phanta.
 
-### Phase 2 — Port and database staging (7-9 days)
+### Phase 2 — Port (8-10 days)
 
-*Owner: Nextflow engineer; platform engineer owns staging; domain scientist
-reviews Phanta-specific transformations.*
+*Owner: Nextflow engineer; domain scientist reviews Phanta-specific
+transformations.*
 
-1. Add `phanta` to the router in [main.nf](../main.nf); remove `phanta` from the
-   `--readsdir` guard and add a `--phanta_samplesheet` guard. Implement
-   `workflows/phanta.nf`, `subworkflows/phanta_input.nf`,
-   `subworkflows/phanta_profiling.nf`. No second root pipeline.
-2. Add every parameter in [Appendix B](#appendix-b-parameter-mapping) to
-   [nextflow.config](../nextflow.config) and
-   [template-params.yaml](../template-params.yaml); add `phanta_db` and
-   `phanta_db_expected_inspect_sha256` to each `conf/databases/<site>.config`.
-   Note in `template-params.yaml` that `paired_end`/`single_end`/`filepattern`
-   do not apply to Phanta.
+1. Add `include { PHANTA }` and a `case 'phanta':` / `PHANTA(` router case to
+   [main.nf](../main.nf), in exactly the shape "CI obligations" requires.
+   Leave `phanta` out of the `--readsdir` guard list; add a
+   `--phanta_samplesheet` existence-and-parse guard as a `def` at the bottom
+   of `main.nf`, beside `report_input_dir`. Add `phanta` to the `default:`
+   error string. Implement everything in `workflows/phanta.nf`: samplesheet
+   parsing emitting `[[id:,paired_end:],files]` plus an ordered sample-ID
+   channel, the per-sample chain, and both cohort barriers. No subworkflow
+   files, no second root pipeline.
+2. Parameters, per [Appendix B](#appendix-b-parameter-mapping):
+   - [conf/params.config](../conf/params.config): a `// ── Phanta options ──`
+     section; `phanta_db = null` under *Database paths*; `phanta_options = ''`
+     under *Per-tool extra arguments*; `phanta` added to the token comment on
+     the `workflow` line.
+   - [conf/harvard_rc.yaml](../conf/harvard_rc.yaml) and
+     [conf/tufts_hpc.yaml](../conf/tufts_hpc.yaml): a commented
+     `### Phanta workflow` section in the existing menu style, `phanta` added
+     to each `### Which workflow` token list, and a line under Tufts'
+     `### Databases this site has not set yet`. State there that
+     `paired_end`/`single_end`/`filepattern` do not apply to Phanta.
+   - `conf/databases/harvard_rc.config`: `phanta_db` and
+     `phanta_db_expected_inspect_sha256` (the AWS file was created in phase 0).
 3. Validate before expensive work: duplicate sample IDs, mixed library layout,
    missing read files, parameter ranges, and every file under "Required database
-   files".
+   files". These checks run in a task, not in the workflow body, so `-preview`
+   is unaffected.
 4. Implement `phanta_db_manifest` and run it as part of validation, ahead of the
    first Kraken2 task. Give it a `withName` block with generous time —
-   `phanta_db_checksum_full` reads 20+ GB.
+   `phanta_db_checksum_full` reads 20+ GB. Extend `version_log` as described
+   under "Provenance".
 5. Spend at most one engineer-day on an nf-core module fit check:
    - `KRAKEN2_KRAKEN2`: accepts `--report-minimizer-data` via `ext.args`,
      retains the eight-column report, suppresses per-read output by default,
@@ -378,11 +507,15 @@ reviews Phanta-specific transformations.*
      the single pinned image. If reconciling costs more than the check saves,
      write local modules under `modules/kraken2/` and `modules/bracken/`.
      Upstream reuse is not a release blocker.
-   Capture both contracts in nf-tests either way.
-6. Establish full-database staging per target profile. HPC: shared filesystem
-   plus node-local scratch. AWS Batch: compare ordinary task localization
-   against download-once reuse on node-local NVMe over a few Kraken2 tasks.
-   Record staging time and bytes transferred; pick the simplest adequate option.
+   Either way, both contracts are asserted by the `run_tests.sh` Phanta cases
+   (the report has eight columns; both Bracken outputs exist under their
+   upstream names).
+6. CI obligations: add the `WORKFLOWS` tuple and the `{samplesheet}` stub to
+   `bin/make_diagrams.py`; add `withName` blocks to `conf/base.config` for
+   every new process; add `def env_phanta` and env-only `withName` blocks to
+   `conf/profiles/harvard_rc.config`; regenerate `docs/diagrams/` and
+   `docs/workflow_reference.md`; add the `env_phanta` rows to
+   `docs/dependencies.md`. Run all three CI checks locally before pushing.
 7. Copy the scientific scripts into flat `bin/phanta_*` files and adapt them
    there — never edit upstream copies. Signatures and current behavior in
    [Appendix A.2](#a2-script-signatures). Every script takes explicit input and
@@ -408,47 +541,59 @@ reviews Phanta-specific transformations.*
 12. Do not port `single_end_krak` or post-processing.
 
 **Deliverables:** routed `phanta` workflow; validated samplesheet input channel;
-Kraken2 and Bracken modules sharing the pinned container; database manifest with
+Kraken2 and Bracken modules running in the pinned image; database manifest with
 fail-fast checking; task-isolated scripts and modules; both cohort barriers;
-deterministic aggregation; publishing contract implemented; one working
-database-staging path per target profile, with recorded staging time and bytes
-transferred.
+deterministic aggregation; publishing contract implemented; `version_log`
+extended; all three CI checks green with the regenerated diagrams committed.
 
-**Gate:** end-to-end run against the tiny database produces all four tables;
-every process declares inputs and outputs; no process scans a shared results
-directory; module tests pass.
+**Gate:** end-to-end run on AWS against the tiny database produces all four
+tables; every process declares inputs and outputs; no process scans a shared
+results directory; `make_diagrams.py --check` and `check_profile_resources.py`
+pass.
 
-### Phase 3 — Validate (3-4 days)
+### Phase 3 — Validate on AWS, then reproduce on FASRC (4-6 days)
 
-*Owner: pipeline engineer; acceptance by domain scientist; cluster and cloud
-runs by platform engineer.*
+*Owner: pipeline engineer; acceptance by domain scientist; FASRC run by
+platform engineer.*
 
-1. Add nf-tests under [tests/](../tests/) per
-   [Appendix E.2](#e2-test-cases). There is no existing per-module test
-   precedent — `tests/` holds two pipeline-level tests — so this establishes
-   the convention. Keep it consistent with `nf-test.config`
-   (`testsDir "tests"`).
-2. Run the routine fixture regression against the tiny database.
-3. Verify `-resume` locally: run the same test twice, confirm scientific tasks
+1. Parameterise [tests/run_tests.sh](../tests/run_tests.sh) so one suite runs
+   at both sites: `NF="${NF:-/n/lab_storage/.../nextflow}"`,
+   `PROFILE="${PROFILE:--profile harvard_rc}"`, and a `PHANTA_ONLY=1` guard
+   that skips the bioBakery cases (which have no tool stack on AWS). Then add
+   the Phanta cases per [Appendix E.2](#e2-test-cases) using the existing
+   `nf_run`/`check_run`/`check_files` helpers plus a new
+   `check_identical <name> <baseline_dir>` that calls
+   `bin/phanta_compare_outputs.sh`. On AWS:
+   `PROFILE="-profile amazon" NF=nextflow PHANTA_ONLY=1 bash tests/run_tests.sh`.
+2. Run the Phanta cases on AWS against the tiny database.
+3. Verify `-resume` on AWS: run the same case twice, confirm scientific tasks
    are cached.
-4. Run the full-database workflow on each target profile. Require byte-identical
-   output against the full-database baseline.
-5. Paired-run comparison on at least one representative real cohort. Retain the
+4. Run the full-database workflow on AWS. Require byte-identical output against
+   the full-database baseline.
+5. **FASRC parity.** Resolve open question 2 first. Pull the ECR digest with
+   Apptainer via `def env_phanta`; stage the database on shared storage with
+   node-local scratch; add `phanta_db` and the expected checksum to
+   `conf/databases/harvard_rc.config`; run the same Phanta cases with the
+   default `PROFILE`; require byte-identity against the **AWS-generated**
+   baselines, tiny and full.
+6. Paired-run comparison on at least one representative real cohort. Retain the
    report; obtain domain-scientist signoff.
-6. Keep the Phanta checkout runnable as the comparator through this milestone.
+7. Keep the Phanta checkout runnable as the comparator through this milestone.
 
-**Deliverables:** passing module and workflow nf-tests; tiny-database regression
-report; local resume evidence; full-database comparison report per target
-profile; real-cohort paired-run report and domain-scientist signoff.
+**Deliverables:** parameterised `run_tests.sh` with passing Phanta cases;
+tiny-database regression report; AWS resume evidence; full-database comparison
+report on AWS; FASRC parity report against the AWS baselines; real-cohort
+paired-run report and domain-scientist signoff.
 
 **Gate:** tiny-database regression, full-database runs, and the real-cohort
-comparison all byte-identical apart from excluded files.
+comparison all byte-identical apart from excluded files — on AWS, and then on
+FASRC against the same baselines.
 
 ### Phase 4 — Tune (1-2 days)
 
 *Owner: platform engineer with pipeline engineer.*
 
-1. Targeted refinements to the chosen staging approach only.
+1. Targeted refinements to the AWS staging approach chosen in phase 0 only.
 2. Benchmark two or three Kraken2 CPU/memory shapes; set one default plus
    bounded OOM retry escalation in [conf/base.config](../conf/base.config),
    reusing the existing `check_max`/`task.attempt` and `errorStrategy`
@@ -461,11 +606,12 @@ comparison all byte-identical apart from excluded files.
    how it differs from `--readsdir`, database staging, publishing,
    work-directory retention, resume, outputs, measured defaults.
 
-**Deliverables:** resource defaults in `conf/base.config`; staging decision and
-measurements; interruption/resume result; merge memory measurement; README
-section and user runbook.
+**Deliverables:** resource defaults in `conf/base.config`; staging refinements
+with measurements; interruption/resume result; merge memory measurement; README
+section, `docs/architecture.md` entry, and user runbook; `manifest.version`
+bumped to `0.0.5`.
 
-**Gate:** each target profile has documented measured defaults; AWS recovers
+**Gate:** AWS and FASRC both have documented measured defaults; AWS recovers
 from one forced interruption.
 
 ## Acceptance criteria
@@ -477,23 +623,27 @@ from one forced interruption.
    `inspect.out` checksum, tool versions, and container digest. A run against a
    database whose checksum does not match
    `phanta_db_expected_inspect_sha256` fails before any Kraken2 task.
-4. Two independent upstream baseline runs byte-identical apart from `.krak`;
-   routine regression uses committed fixtures without rerunning Phanta.
-5. Tiny database and pinned container exist; fixture regression runs on a
-   GitHub runner without the 25 GB database.
-6. All Phanta processes run in the same pinned image on every profile.
-7. Module-fit tests prove Kraken2 minimizer compatibility and both Bracken
-   outputs, or equivalent tests cover local fallbacks.
-8. Both cohort barriers implemented explicitly, covered by cardinality tests.
+4. Two independent upstream baseline runs on AWS byte-identical apart from
+   `.krak`; routine regression uses committed fixtures without rerunning
+   Phanta.
+5. Tiny database and ECR image exist; the fixture regression runs as
+   `run_tests.sh` cases on AWS and on FASRC without the 25 GB database.
+6. All Phanta processes run from the same image digest on `amazon` and
+   `harvard_rc`, each through that profile's own mechanism.
+7. The `run_tests.sh` Phanta cases assert Kraken2's eight-column minimizer
+   report and both Bracken outputs under their upstream names.
+8. Both cohort barriers implemented explicitly; the barrier-cardinality case
+   passes.
 9. No module writes outside its task directory; all outputs and
    biological-empty behavior explicit.
-10. All four tables byte-identical to baseline against both tiny and full
-    databases, on every target profile.
+10. All four tables byte-identical to the AWS-generated baseline against both
+    tiny and full databases, on AWS and then on FASRC.
 11. A representative real cohort passes comparison with domain-scientist
     signoff.
-12. `-resume` passes locally and on cluster, including one AWS Spot
-    interruption.
-13. Database staging, Kraken2 sizing, and one aggregation-memory measurement
+12. `-resume` passes on AWS and on FASRC, including one AWS Spot interruption.
+13. All three CI checks pass with the regenerated `docs/diagrams/` and
+    `docs/workflow_reference.md` committed.
+14. Database staging, Kraken2 sizing, and one aggregation-memory measurement
     documented without speculative scale tiers.
 
 ## Decisions already made
@@ -502,11 +652,18 @@ Do not relitigate these during implementation. Rationale for each is in
 [phanta_migration_decisions.md](phanta_migration_decisions.md).
 
 - All implementation lives in HVP-nextflow; Phanta stays read-only.
-- Integrate through the existing router and `modules/`; never add to
-  `processes/`; no separate nf-core repository.
+- AWS Batch first and generates the baseline; Harvard FASRC second and must
+  reproduce it; Tufts deferred. AWS support is Phanta-only.
+- Integrate through the existing router; every process in `modules/**/main.nf`;
+  the whole workflow in `workflows/phanta.nf`, no subworkflow files until a
+  second consumer exists; no separate nf-core repository.
+- One image digest in ECR, referenced per profile through that profile's own
+  mechanism. No shared `conf/phanta.config`.
+- Tests are `run_tests.sh` cases, parameterised by site. CI stays tool-free;
+  Phanta's CI contribution is the three existing checks passing.
 - Prefer pinned nf-core Kraken2 and Bracken modules with a one-day fit limit and
-  local fallbacks; the shared container overrides any module's own container
-  directive.
+  local fallbacks; the per-profile container overrides any module's own
+  container directive.
 - Phanta takes a samplesheet; the other workflows keep `--readsdir`. A legacy
   TSV converter ships alongside.
 - Fix output ordering per file at emit time. No canonicalization layer; compare
@@ -524,6 +681,26 @@ Deferred, not denied: Phanta post-processing, `single_end_krak`, speculative
 scale tiers, sharded aggregation, a second cloud provider, and unifying the
 samplesheet and `--readsdir` input models.
 
+## Inputs a fresh agent cannot produce
+
+Hand these over before starting, so the implementer neither guesses nor stalls.
+Each is tagged with the phase it blocks.
+
+1. **AWS infrastructure** (blocks phase 0): a Batch compute environment with
+   NVMe-backed instance types for Kraken2 (≥ 64 GB RAM to hold the 25 GB
+   index), job queue names, an S3 bucket for the database and the work dir, an
+   ECR repository to push to, and the IAM role the launch host assumes.
+2. **The database decision** (blocks phase 1, not phase 0): open question 1 —
+   or permission to proceed with `unmasked_db_v1.01.tar.gz` pending signoff.
+   Phase 0 and the tiny-DB work need no answer.
+3. **FASRC container policy** (blocks phase 3 step 5): open question 2, plus a
+   shared-storage path for the 25 GB database.
+4. **The acceptance cohort** (blocks phase 3 step 6): open question 4.
+5. **Repo access** if not on this machine: a clone URL plus the commits in
+   "Pinned artifacts".
+
+The tiny-database genomes are *not* an input — Appendix D pins them.
+
 ## Open questions
 
 Resolve with the named owner; record the answer here.
@@ -533,17 +710,17 @@ Resolve with the named owner; record the answer here.
    upstream publishes no checksums. The latter is recommended. The open part is
    scientific: Phanta's default database is human-gut specific, so confirm it
    fits HVP's sample types. *Domain scientist confirms; engineer records
-   filename, SHA256, date. Phase 1.*
-2. **Does CI currently pass?** See phase 0 step 4. *Pipeline engineer, phase 0.*
-3. **Which profiles ship at release?** *Platform/data owner, phase 1.*
-4. **Tiny database committed or downloaded?** Depends on achieved size.
+   filename, SHA256, date. Gates phase 1.*
+2. **Does FASRC permit Apptainer for this stack?** If yes, `def env_phanta`
+   pulls the ECR digest and byte-identity with AWS holds. If FASRC requires a
+   hutlab module instead, byte-identity across sites is **not** guaranteed and
+   FASRC gets its own baseline — record that explicitly. *Platform engineer.
+   Gates phase 3 step 5, not AWS work.*
+3. **Tiny database committed or downloaded?** Depends on achieved size.
    *Pipeline engineer, phase 0.*
-5. **Which container registry?** `aws.config` uses `public.ecr.aws`; HPC
-   profiles mostly use environment modules. The pinned image needs a home
-   reachable from every target executor. *Platform engineer, phase 0.*
-6. **Emit `pipeline_completed.txt` or exclude it?** *Pipeline engineer, phase 2.*
-7. **Which real cohort is the acceptance dataset?** Needed before phase 3 step
-   5. *Domain scientist.*
+4. **Which real cohort is the acceptance dataset?** *Domain scientist. Gates
+   phase 3 step 6.*
+5. **Emit `pipeline_completed.txt` or exclude it?** *Pipeline engineer, phase 2.*
 
 ---
 
@@ -690,13 +867,15 @@ Upstream `config.yaml` key → HVP param → default. Defaults are upstream's.
 | `read_length` | `phanta_read_length` | `150` |
 | `filter_thresh` | `phanta_filter_thresh` | `10` |
 | `delete_intermediate` | replaced by `save_intermediate` | `false` |
-| — | `run_phanta` | `true` |
+| — | `phanta_options` | `''` — appended verbatim to the Kraken2 command, per the repo's `<tool>_options` convention |
 | — | `phanta_db_expected_inspect_sha256` | `null`; per site. Mismatch fails the run |
 | — | `phanta_db_checksum_full` | `false`; `true` for baselines and release validation |
 
-Library layout comes from the samplesheet, so Phanta ignores the existing
-`paired_end`/`single_end`/`filepattern` params. Say so in
-`template-params.yaml`.
+There is no `run_phanta`: `run_*` are stage toggles inside mgx/mtx, and Phanta
+is selected with `--workflow phanta`. Library layout comes from the
+samplesheet, so Phanta ignores the existing
+`paired_end`/`single_end`/`filepattern` params; say so in the
+`### Phanta workflow` section of both `conf/*.yaml` templates.
 
 ---
 
@@ -729,15 +908,22 @@ the two distinct output orderings — keep it when reproducing the baseline.
 
 ---
 
-# Appendix D: building the tiny CI database
+# Appendix D: building the tiny test database
 
-No upstream recipe exists. Target under ~500 MB.
+No upstream recipe exists. Target under ~500 MB; the genomes below total about
+2.5 Mb of sequence, so the Kraken2 index will be tens of MB.
 
-1. Choose small reference genomes spanning **all four** threshold classes —
-   bacterial, viral, archaeal, eukaryotic — so every
+1. Use these four genomes — one per threshold class, so every
    `cov_thresh_*`/`minimizer_thresh_*` branch in `filter_kraken_reports.py` is
-   exercised. A viral genome plus one small bacterium, one archaeon, and one
-   small eukaryotic contig suffices.
+   exercised. Fetch by RefSeq accession; do not substitute without updating the
+   baseline.
+
+   | Class | Organism | Accession | Size |
+   | --- | --- | --- | --- |
+   | viral | phiX174 | `NC_001422` | 5 kb |
+   | bacterial | *Mycoplasma genitalium* G37 | `NC_000908` | 580 kb |
+   | archaeal | *Methanocaldococcus jannaschii* | `NC_000909` | 1.7 Mb |
+   | eukaryotic | *S. cerevisiae* chromosome I | `NC_001133` | 230 kb |
 2. Build the Kraken2 index:
    ```bash
    kraken2-build --download-taxonomy --db tiny_db   # or a trimmed nodes/names pair
@@ -765,8 +951,8 @@ No upstream recipe exists. Target under ~500 MB.
    (`tests/fixtures/phanta/tiny_db/build.sh`) with a checksum, so the database
    is reproducible rather than an opaque blob.
 
-If the result exceeds what should live in git, host it and have CI download by
-pinned URL plus checksum.
+If the result exceeds what should live in git, host it (S3 for AWS, shared
+storage for FASRC) and have `run_tests.sh` fetch it by pinned URL plus checksum.
 
 ---
 
@@ -776,15 +962,16 @@ pinned URL plus checksum.
 
 | Path | Action | Done when |
 | --- | --- | --- |
-| `main.nf` | modify | `phanta` routes; `--readsdir` guard excludes it; `--phanta_samplesheet` guard added |
-| `nextflow.config` | modify | all Appendix B params present with defaults |
-| `template-params.yaml` | modify | Phanta params documented, including that layout params do not apply |
-| `conf/phanta.config` | create | pinned container attached to all Phanta processes; included by every profile |
+| `main.nf` | modify | `include { PHANTA }`; `case 'phanta':` / `PHANTA(` in the exact shape; excluded from the `--readsdir` guard; `--phanta_samplesheet` guard as a `def`; `phanta` in the `default:` string |
+| `nextflow.config` | modify | `amazon` profile also includes `conf/databases/aws.config` |
+| `conf/params.config` | modify | `// ── Phanta options ──` section with every Appendix B default; `phanta_db = null`; `phanta_options = ''`; `phanta` in the workflow-token comment |
+| `conf/harvard_rc.yaml`, `conf/tufts_hpc.yaml` | modify | commented `### Phanta workflow` section; `phanta` in `### Which workflow`; Tufts "not set yet" line |
 | `conf/base.config` | modify | `withName` blocks for `kraken2`, `bracken`, `phanta_db_manifest`, and the small table steps |
-| `conf/databases/*.config` | modify | `phanta_db` + `phanta_db_expected_inspect_sha256` per site |
-| `workflows/phanta.nf` | create | validates, calls subworkflows, publishes |
-| `subworkflows/phanta_input.nf` | create | emits `[[id:,paired_end:],files]` plus an ordered sample-ID channel |
-| `subworkflows/phanta_profiling.nf` | create | per-sample chain with both cohort barriers explicit |
+| `conf/profiles/aws.config` | modify | Phanta blocks with `container` digest, `queue`, cpus/memory/time restated; `cliPath` no longer hardcoded |
+| `conf/profiles/harvard_rc.config` | modify | `def env_phanta` (Apptainer pull of the digest); env-only `withName` blocks on selectors base does not use |
+| `conf/databases/aws.config` | create | `phanta_db` + `phanta_db_expected_inspect_sha256` as `s3://` paths |
+| `conf/databases/harvard_rc.config` | modify | `phanta_db` + `phanta_db_expected_inspect_sha256` |
+| `workflows/phanta.nf` | create | `workflow PHANTA {` at col 0 with a `//` line above; samplesheet parsing emitting `[[id:,paired_end:],files]` + ordered sample-ID channel; per-sample chain; both barriers explicit; publishes |
 | `modules/kraken2/main.nf` | create | A.1 command; minimizer report; `.krak` unpublished |
 | `modules/bracken/main.nf` | create | A.1 command; input staged as `.krak.report.filtered`; both outputs emitted |
 | `modules/taxonomy/phanta_filter/main.nf` | create | filtered report, species table, decisions, eligibility status |
@@ -794,32 +981,34 @@ pinned URL plus checksum.
 | `modules/utils/phanta_prepare_counts/main.nf` | create | `.to_merge` plus the per-sample total-reads row |
 | `modules/utils/phanta_normalize_counts/main.nf` | create | one sample per task |
 | `modules/utils/phanta_merge_tables/main.nf` | create | three tables, columns in samplesheet order |
+| `modules/utils/version_log/main.nf` | modify | `phanta_db:` under "Database Paths"; Phanta params block |
+| `bin/make_diagrams.py` | modify | `phanta` tuple in `WORKFLOWS`; `{samplesheet}` stub in `make_stubs()` plumbed through `render_dag` |
 | `bin/phanta_convert_samplesheet.py` | create | legacy TSV → CSV |
 | `bin/phanta_*.py`, `bin/phanta_calc_total_reads.sh` | create | explicit I/O paths; no derived output names |
 | `bin/phanta_compare_outputs.sh` | create | `diff -r` wrapper; excludes `.krak` and `pipeline_info/`; nonzero on any diff |
-| `tests/phanta_modules.nf.test` | create | E.2 module cases pass |
-| `tests/phanta_workflow.nf.test` | create | E.2 workflow cases pass |
-| `tests/fixtures/phanta/**` | create | tiny DB, inputs, samplesheets, baselines |
+| `tests/run_tests.sh` | modify | `NF`/`PROFILE` env overrides; `PHANTA_ONLY` guard; `check_identical` helper; E.2 cases |
+| `tests/fixtures/phanta/**` | create | tiny DB (or fetch script + checksum), inputs, samplesheets, baselines |
+| `docs/diagrams/architecture.mmd`, `docs/diagrams/phanta.mmd`, `docs/workflow_reference.md` | generate | `bin/make_diagrams.py` output committed; `--check` passes |
+| `docs/dependencies.md` | modify | `env_phanta` row in the stack table; `amazon` row updated |
+| `docs/architecture.md` | modify | Phanta entry; stale `version_log` claim fixed |
 | `docs/phanta_testing.md` | create | baseline refresh, full-DB procedure, resolved versions, checksums |
-| `README.md` | modify | Phanta section |
+| `README.md` | modify | Phanta in Workflow & I/O, Project Structure, Project Status |
 
 ## E.2 Test cases
 
-| Case | Level | Asserts |
-| --- | --- | --- |
-| Paired-end cohort, tiny DB | workflow | four tables byte-identical to fixture |
-| Ordinary single-end cohort | workflow | same, single-end channel path |
-| Bracken-ineligible sample | workflow | zero-byte products; sample in `samples_that_failed_bracken.txt`; run succeeds |
-| Duplicate sample IDs | workflow | fails before any Kraken2 task |
-| Mixed paired/single cohort | workflow | fails with a clear message |
-| Missing database file | workflow | fails before any Kraken2 task, naming the file |
-| Read length with no `kmer_distrib` | workflow | fails before any Kraken2 task |
-| Barrier cardinality | workflow | `phanta_failed_samples` and `phanta_total_reads` each run exactly once |
-| Column ordering | workflow | non-alphabetical samplesheet still yields samplesheet-ordered columns and sorted `total_reads.tsv` rows |
-| Database manifest written | workflow | manifest records the tiny DB's `inspect.out` SHA256, tool versions, container digest |
-| Wrong database rejected | workflow | with a wrong `phanta_db_expected_inspect_sha256`, fails before Kraken2 and names the mismatch |
-| Manifest excluded from diff | workflow | fixture comparison passes despite the manifest's varying path and timestamp |
-| `-resume` | workflow | second identical run caches all scientific tasks |
-| Kraken2 module fit | module | `--report-minimizer-data` accepted; eight-column report; version >= 2.1.2 |
-| Bracken module fit | module | both outputs present with upstream names |
-| Each `phanta_*` module | module | explicit outputs; nothing written outside the task dir |
+All are `tests/run_tests.sh` cases under `PHANTA_ONLY=1`, run first on AWS
+(`PROFILE="-profile amazon"`) and then on FASRC (default). Numbering continues
+from the existing 16.
+
+| Case | Asserts |
+| --- | --- |
+| `test17_phanta_pe` — paired-end cohort, tiny DB | `check_run`; `check_identical` against the tiny-DB baseline: four tables byte-identical |
+| `test18_phanta_se` — ordinary single-end cohort | same, single-end path |
+| `test19_phanta_ineligible` — one Bracken-ineligible sample | `check_run`; zero-byte products present; sample listed in `samples_that_failed_bracken.txt` |
+| `test20_phanta_ordering` — non-alphabetical samplesheet | merged-table header columns in samplesheet order; `total_reads.tsv` rows sorted |
+| `test21_phanta_manifest` | `pipeline_info/phanta_db_manifest.txt` exists; `grep` finds the tiny DB's `inspect.out` SHA256, Kraken2 version, and the image digest |
+| `test22_phanta_wrong_db` | with a wrong `phanta_db_expected_inspect_sha256`: nonzero exit; log names the mismatch; no `kraken2` task directory exists under the case's work dir |
+| `test23_phanta_barriers` | exactly one task directory each for `phanta_failed_samples` and `phanta_total_reads` under the case's work dir |
+| `test24_phanta_resume` | second identical `nf_run` with `-resume`: all scientific tasks reported as cached in the log |
+| `test25_phanta_guards` — fast, no cluster | duplicate sample IDs, mixed layout, missing database file, and read length with no `kmer_distrib` each fail before any Kraken2 task with a clear message (same shape as the existing tests 15-16) |
+| Tool contracts (asserted inside `test17`) | Kraken2 report has eight columns; both Bracken outputs exist under their upstream names; no file written outside any task dir |

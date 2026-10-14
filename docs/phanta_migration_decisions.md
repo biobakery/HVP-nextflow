@@ -61,9 +61,10 @@ readable tabular diffs).
 
 ## 2. One pinned container is a prerequisite, not deferred work
 
-**Decision:** build and publish a pinned Phanta image before baselining, and
-attach it to every Phanta process from `conf/phanta.config` so all profiles
-share it.
+**Decision:** build one Phanta image before baselining, push it to ECR, and
+reference that single digest from every profile through that profile's own
+mechanism — `container` in `amazon`'s `withName` blocks, an Apptainer pull in a
+`def env_phanta` `beforeScript` on `harvard_rc`.
 
 Byte-identity is a property of the software environment, not of the port.
 `filter_kraken_reports.py`, `scale_bracken.py`, `merge.py`, and
@@ -77,17 +78,33 @@ Upstream does not pin these. `phanta_env.yaml` pins `kraken2=2.1.6` and
 baseline's exact pandas and numpy versions must be captured at generation time
 and frozen in the image.
 
-This repository also pins containers inconsistently:
-[conf/profiles/aws.config](../conf/profiles/aws.config) sets per-process ECR
-images, [conf/profiles/tufts_hpc.config](../conf/profiles/tufts_hpc.config) sets
-one, and `harvard_rc.config` and `local.config` set none — relying on
-environment modules or host tools. Phanta cannot be byte-identical across a
-Slurm module stack and an ECR image, so the usual per-profile pattern cannot
-apply here.
+This repository delivers software per profile, and says so as a rule —
+[docs/dependencies.md](dependencies.md): a process runs whatever is on `PATH`,
+and what puts it there "lives in the profile … and nowhere else". `amazon` uses
+per-process ECR containers, `tufts_hpc` has Apptainer enabled, and `harvard_rc`
+loads hutlab environment modules through a `def env_<stack>` per software stack.
+An earlier draft proposed a shared `conf/phanta.config` carrying one container
+directive for all profiles; the config layering in `nextflow.config` has no slot
+for such a file, and it would have been the only place in the repo where a tool
+environment lived outside a profile.
 
-**Rejected:** deferring containers to a separate "custom container / SBOM
-program" (as an earlier draft did) while simultaneously requiring byte-identical
-output. Those two positions are incompatible.
+So the mechanism follows the repo, and the *digest* is what is shared. Because
+AWS is the first target, the ECR image is canonical and the baseline is
+generated there. FASRC then reproduces it by pulling the same digest with
+Apptainer — which `tufts_hpc` already does for its own stack, so there is
+precedent.
+
+**The caveat that matters:** byte-identity across sites holds only if FASRC
+runs the container. If FASRC policy requires a hutlab module for this stack
+instead, pandas/numpy versions are no longer guaranteed to match the image, and
+FASRC must generate its own baseline. That is open question 2 in the spec; it
+gates FASRC work, not AWS work.
+
+**Rejected:** a shared `conf/phanta.config` (layering violation, and only
+"shared" in name — each executor still needs its own delivery mechanism);
+deferring containers to a separate "custom container / SBOM program" (as an
+earlier draft did) while simultaneously requiring byte-identical output. Those
+two positions are incompatible.
 
 ---
 
@@ -132,6 +149,22 @@ Mitigations in the spec: one internal channel model
 (`[[id:,paired_end:],files]`), a converter for the legacy format, and explicit
 documentation of the difference. Unifying the two input models is deferred, not
 denied.
+
+**Reconsidered after merging `main` (v0.0.4), and kept.** The merge removed
+what little precedent there was: `conf/params.config` now declares itself "the
+single place a parameter is declared", there is no `splitCsv` anywhere in the
+tree, and `bin/make_diagrams.py` can only stub a reads directory — so a
+samplesheet needs its own stub for the CI graph check. The alternative was put
+to the user plainly: make Phanta an mgx stage toggle (`--run_phanta true`),
+consuming the existing `read_input.nf` channel after KneadData, with no CSV at
+all. Its costs: sample column order would have to become alphabetical (and the
+upstream baseline regenerated to match), every Phanta test would need
+KneadData's host database, and the relationship between `run_phanta` and
+`run_taxonomic_profiling` (MetaPhlAn) would need defining. The user chose the
+standalone workflow. A thin mgx wrapper that feeds KneadData output into the
+same chain remains a possible later addition — which is also why the chain
+lives in `workflows/phanta.nf` rather than a subworkflow until that second
+consumer exists.
 
 ---
 
@@ -193,7 +226,7 @@ validation.
 The manifest carries a path and timestamp, so it is not byte-stable across runs.
 It lives in `pipeline_info/`, which the comparison excludes — Nextflow's own
 timeline/report/trace/dag files there are already timestamped — and its checksum
-fields are asserted in nf-test instead.
+fields are asserted by a `run_tests.sh` case with `grep` instead.
 
 ---
 
@@ -257,47 +290,151 @@ alternative; the rest are community or extension builds.
 
 ---
 
-## 8. A tiny CI database is mandatory, and had to be invented
+## 8. A tiny test database is mandatory, and had to be invented
 
 **Decision:** build a small Kraken2 + Bracken database as a phase 0
-deliverable, with a committed build script.
+deliverable, with a committed build script and pinned genome accessions.
 
-An earlier draft required a "routine fixture regression" in CI but never
-scheduled the artifact that makes it possible. Phanta's default database is
-20-25 GB and GitHub-hosted runners have roughly 14 GB of disk, so the full
-database cannot be used in CI. Phanta's committed `testing/` directory holds
-expected *outputs* but no database and no reads — the test reads are a separate
-`test_dataset.tar.gz` download, and `testing/samp_file.txt` references paths
-absent from a fresh checkout.
+An earlier draft required a "routine fixture regression" but never scheduled
+the artifact that makes it possible. Phanta's committed `testing/` directory
+holds expected *outputs* but no database and no reads — the test reads are a
+separate `test_dataset.tar.gz` download, and `testing/samp_file.txt` references
+paths absent from a fresh checkout.
+
+The original justification was CI: the full database is 20-25 GB and a
+GitHub-hosted runner has about 14 GB of disk. That justification evaporated
+with the merge of `main` — the repo's CI is tool-free by policy and runs no
+pipeline at all (see §10). The tiny database still earns its place on three
+grounds: a regression run completes in minutes rather than hours; it needs no
+25 GB staged per test run on either site; and it is the only practical way to
+include a deliberately Bracken-ineligible sample, which exercises the zero-byte
+substitute outputs that the real test reads never trigger.
 
 No upstream recipe exists for a minimal database, so the spec carries one
-(Appendix D). It has to span all four threshold classes — bacterial, viral,
-archaeal, eukaryotic — or the filtering branches go untested, and it needs a
-deliberately Bracken-ineligible sample to exercise the zero-byte substitute
-outputs.
+(Appendix D), with four named RefSeq accessions spanning the four threshold
+classes — bacterial, viral, archaeal, eukaryotic — so every filtering branch
+runs. The accessions are pinned so a fresh implementer does not choose, and so
+a baseline generated from them stays valid.
 
 This is also why the effort estimate moved from 10-15 to 16-22 engineer-days:
 the container and the tiny database are several days of work that the earlier
-plan assumed away.
+plan assumed away. (It moved again, to 21-30, for the AWS groundwork and FASRC
+parity — see §9.)
 
 ---
 
-## 9. Confirm the deployment target rather than choosing a cloud
+## 9. AWS first and generates the baseline; FASRC second and reproduces it
 
-**Decision:** decide which of the existing profiles Phanta supports at release.
+**Decision:** AWS Batch (`amazon`) is the first target and the site where the
+baseline is generated. Harvard FASRC (`harvard_rc`) is the second, required
+target: it must reproduce the AWS baseline byte-for-byte. Tufts is deferred. A
+second cloud provider stays deferred.
 
 An earlier draft opened with "select the initial cloud on day one … implement
-one of AWS Batch/S3 or Google Batch/GCS". That decision is substantially already
-made: [conf/profiles/aws.config](../conf/profiles/aws.config) exists with AWS
-Batch, an S3 work directory, and per-process queues and ECR images. The repo
-also ships `standard`/`local`, `tufts_hpc`, `harvard_rc`, and legacy `engaging`
-profiles — and the Slurm HPC profiles appear to be the primary path in practice,
-which the earlier draft omitted entirely while treating cloud as the only
-target.
+one of AWS Batch/S3 or Google Batch/GCS", and a later one treated the Slurm
+profiles as primary with AWS as an optional add-on. The user settled it: AWS
+first, FASRC second, both required.
 
-The real question is narrower: which profiles must work at release, given where
-the FASTQs and the 25 GB database already live. A second cloud provider stays
-deferred.
+The `amazon` profile is explicitly incomplete. Its header, post-merge: "AWS
+Batch. INCOMPLETE, and unmaintained since v0.0.2 … configures containers and
+queues for the six read-based core processes only … Treat this as a starting
+point for an AWS port, not as a working profile." It has no
+`conf/databases/aws.config`, a hardcoded `aws.batch.cliPath`, and requires `-w
+s3://...` on every launch. Phanta is therefore the first workflow to make
+`amazon` actually work. That scope is deliberately narrow: the profile stays
+broken for the other fifty-odd processes, and fixing them is not Phanta's job.
+
+**Why the order is a design input, not a schedule.** Three things follow from
+"AWS first":
+
+- *Baseline provenance.* The byte-identity bar needs one canonical environment.
+  AWS is container-native, so the ECR digest is the canonical environment with
+  no translation step, and the baseline carries that digest in its manifest.
+  FASRC's job becomes "match this", which is a cleaner acceptance test than two
+  sites each generating a baseline and hoping they agree.
+- *Where the groundwork goes.* `conf/databases/aws.config`, the Phanta blocks in
+  `aws.config`, and the S3-vs-NVMe staging decision all moved into phase 0 as
+  the critical path, rather than sitting in phase 2 behind the port.
+- *What the test suite must do.* `tests/run_tests.sh` is bound to FASRC — it
+  hardcodes the Nextflow path, `-profile harvard_rc`, and FASRC fixture
+  locations. Phanta's tests have to run on AWS first, so the suite is
+  parameterised (§12) rather than waiting for FASRC.
+
+**Rejected:** FASRC-first (would generate the baseline under a module stack
+whose pandas/numpy are not pinned to the image — see §2); AWS-only (the HPC
+cluster is where the lab actually runs); dropping AWS from v1 (the user's call
+was to keep it).
+
+---
+
+## 10. Tests are `run_tests.sh` cases; CI stays tool-free
+
+**Decision:** Phanta's tests are cases in `tests/run_tests.sh`, the repo's one
+integration suite. CI does not run them. Phanta's CI obligation is that the
+three existing tool-free checks pass.
+
+Earlier drafts planned an nf-test suite under `tests/` and a "routine fixture
+regression" running in GitHub Actions. Both targets were removed by the merge of
+`main`: the v0.0.4 cleanup deleted nf-test entirely because its cases "asserted
+a four-process pipeline, loaded params files that were not in the repo, and so
+had not run in a long time" (`tests/run_tests.sh` header), and CI was rewritten
+to run only what needs no tools — profile parsing, `check_profile_resources.py`,
+and `make_diagrams.py --check` (`tests/README.md`, "What CI checks"). Those are
+stated policy, not accident.
+
+So the tests follow the suite that exists: bash cases using `nf_run`,
+`check_run`, `check_files`, parallel drivers, `.status` files, plus one new
+helper for byte-identity. The assertions from the earlier nf-test matrix are all
+preserved; only the harness changed.
+
+**Rejected:** a Phanta-only tool-running CI job. The tiny database and the
+container would make it feasible on a GitHub runner, so it is not a technical
+impossibility — it contradicts the repo's stated CI policy. If that policy
+changes, Phanta is the easiest workflow to bring under it. Also rejected:
+re-introducing nf-test for Phanta alone (two test frameworks in one repo, one of
+them just deleted on purpose).
+
+---
+
+## 11. The generated docs are part of the deliverable
+
+**Decision:** `docs/diagrams/architecture.mmd`, `docs/diagrams/phanta.mmd`, and
+`docs/workflow_reference.md` are regenerated with `bin/make_diagrams.py` and
+committed in the same change as the workflow.
+
+This is not optional tidiness. `make_diagrams.py --check` runs in CI and fails
+on any byte difference between the committed files and a fresh regeneration.
+The architecture diagram is parsed from `main.nf`'s router and the `include`
+statements, so `architecture.mmd` changes the moment `case 'phanta':` is added
+— before any `WORKFLOWS` entry exists. A Phanta pull request that does not
+regenerate the diagrams is red on arrival.
+
+Two consequences the spec now carries. The script's regexes impose formatting
+on the code: `workflow PHANTA {` at column 0 with a `//` comment directly
+above, `case 'phanta':` with `PHANTA(` on the next line, every process with a
+comment above and a `publishDir` within twelve lines. And the script's stub
+generator only knows how to fake a reads directory or a report folder — a
+samplesheet is new, so `make_stubs()` needs a CSV stub and the input guard must
+accept a file that exists but points at empty FASTQs, because `-preview` builds
+the graph without running a task.
+
+---
+
+## 12. One test suite, parameterised by site
+
+**Decision:** `tests/run_tests.sh` gets `NF` and `PROFILE` environment
+overrides and a `PHANTA_ONLY=1` guard, so the same Phanta cases run on AWS
+(`PROFILE="-profile amazon" NF=nextflow`) and on FASRC (defaults unchanged).
+
+The suite hardcodes FASRC: the Nextflow binary under `/n/lab_storage`,
+`-profile harvard_rc`, and fixture paths under `$HOME`. Phanta must be tested on
+AWS first (§9), where none of that exists. The bioBakery cases cannot run on AWS
+either — there is no KneadData/MetaPhlAn/HUMAnN stack there — hence the guard
+that skips them.
+
+**Rejected:** a separate `tests/run_phanta_tests.sh`. Two suites with copied
+helpers drift; the existing one's comments explain at length why it is "the
+only test suite", and that is worth preserving. The overrides are three lines.
 
 ---
 
@@ -334,3 +471,18 @@ of the comparison to agree.
 directory URL (`.../Phanta_DBs/`) rather than an artifact, which hid the
 `database_V1` / `unmasked_db_v1.01` contradiction entirely and left the
 byte-identity requirement resting on an unspecified input.
+
+**Both documents were written against the pre-v0.0.4 tree.** They were committed
+as `5793365` and `main` was merged in immediately after as `2a5a9df`, bringing
+the v0.0.4 restructure. The spec was then reconciled against the merged tree.
+What had gone stale: the nf-test suite and `nf-test.config` (deleted);
+`template-params.yaml` (replaced by `conf/harvard_rc.yaml` and
+`conf/tufts_hpc.yaml`); the `processes/` directory (deleted); the `engaging`
+profile (deleted); params declared in `nextflow.config` (moved to
+`conf/params.config`); a `run_phanta` stage toggle (a category error — Phanta
+is a `--workflow` token); a shared `conf/phanta.config` (a layering violation);
+"GitHub runner" gates (CI runs no tools); "HPC as the primary path" (the user
+chose AWS first); and two subworkflow files for a single-consumer workflow
+(against the repo's layering rule). The merge also added obligations the spec
+had not known about: `make_diagrams.py --check`, `check_profile_resources.py`,
+and the `def env_<stack>` convention. §§9-12 record the resulting decisions.
