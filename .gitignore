@@ -9,6 +9,12 @@ results/
 tests/results/
 tests/work/
 
+# Scratch output of tests/fixtures/phanta/tiny_db/build.sh, which the READMEs
+# invoke as `-o /w/build/tiny`. Holds the raw NCBI downloads, the dustmasker
+# output and the Bracken build intermediates. The parts worth keeping are copied
+# into tests/fixtures/phanta/ by hand and committed; this tree is disposable.
+/build/
+
 # Large intermediate files inside the committed tutorial reference output
 tests/data/tutorial_output/**/*.sam
 tests/data/tutorial_output/**/*.sam.bz2

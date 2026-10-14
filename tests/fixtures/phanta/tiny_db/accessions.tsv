@@ -1,0 +1,35 @@
+# The four genomes of the tiny test database. Pinned by VERSIONED accession:
+# an unversioned accession tracks the latest revision and would silently change
+# the database, and with it every committed baseline.
+#
+# One genome per threshold class, so that each cov_thresh_*/minimizer_thresh_*
+# branch in filter_kraken_reports.py is exercised by a real sample.
+#
+# seq_taxid is what the FASTA header is tagged with. For three of the four it is
+# the STRAIN taxid, which Kraken2 reports one level below species (rank code S1);
+# phiX174 is tagged at species level (S). That mix is deliberate — it exercises
+# both arms of the "lowest rank for this species" logic in
+# filter_kraken_reports.py, which treats an S line followed by S1 differently
+# from an S line standing alone.
+#
+# The fifth genome is tagged at GENUS level on purpose, and is not one of the
+# four threshold classes. Without it, every row of library/species_genome_size.txt
+# resolves to a species, pandas types the species_level_taxa column as int64, and
+# scale_bracken.py dies on
+#   ValueError: You are trying to merge on object and int64 columns
+# because it casts the Bracken side to str. The real Phanta database never hits
+# this: it holds many genomes classified no further than genus, for which
+# calculate_genome_size.py writes the literal 'error - taxid above species',
+# which forces the column to object and makes the merge string-to-string. A
+# tiny database with no such genome is unrepresentative, and fails in a way the
+# real one does not. This is not a pandas-version issue — pandas 1.5.3 raises
+# the same error.
+#
+# sha256 is of the raw FASTA as fetched from NCBI, before header rewriting.
+#
+# class	accession	seq_taxid	species_taxid	organism	sha256
+viral	NC_001422.1	10847	10847	Sinsheimervirus phiX174	caa155c83967cc080f4f188f14f1f28c18d77448e87c3d00d3579ed348f4de2a
+bacterial	NC_000908.2	243273	2097	Mycoplasmoides genitalium G37	cc21ace789ae96213ab10a595b5f52c870b8218581a0420ba13cee0409d8ccc9
+archaeal	NC_000909.1	243232	2190	Methanocaldococcus jannaschii DSM 2661	eb4f0ad97e8fe0b40b03d74d76bc6c5cae241582d83653d58a09bc6a51e0a8d6
+eukaryotic	NC_001133.9	559292	4932	Saccharomyces cerevisiae S288C chromosome I	da6c79984b9dc7110e49cbb57065eca8284d28c08473333fa3242ab2d35aafea
+genus_only	NC_000912.1	2995234	-	Mycoplasmoides pneumoniae M129 (tagged at genus)	644532f278bafc84b08ed6b7db517a02f9cc5a8557b6451a32d6c8155dacdcc6

@@ -1,0 +1,14 @@
+100.00	968605	0	R	1	root
+ 99.82	966847	0	R1	131567	  cellular organisms
+ 49.42	478703	0	D	2157	    Archaea
+ 49.42	478703	0	S	2190	      Methanocaldococcus jannaschii
+ 49.42	478703	478703	S1	243232	        Methanocaldococcus jannaschii DSM 2661
+ 43.41	420452	0	D	2	    Bacteria
+ 43.41	420452	252028	G	2995234	      Mycoplasmoides
+ 17.39	168424	0	S	2097	        Mycoplasmoides genitalium
+ 17.39	168424	168424	S1	243273	          Mycoplasmoides genitalium G37
+  6.99	67692	0	D	2759	    Eukaryota
+  6.99	67692	0	S	4932	      Saccharomyces cerevisiae
+  6.99	67692	67692	S1	559292	        Saccharomyces cerevisiae S288C
+  0.18	1758	0	D	10239	  Viruses
+  0.18	1758	1758	S	10847	    Sinsheimervirus phiX174
