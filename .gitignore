@@ -26,3 +26,9 @@ tests/data/tutorial_output/**/.anadama/
 # python bytecode from the bin/scripts helpers
 __pycache__/
 *.pyc
+
+# JetBrains project files. Per-developer state: module layout, an output path
+# for a language this repo does not build, and a "this is a git repo" mapping.
+# Nothing in the pipeline reads them, and they churn whenever anyone opens the
+# project. IntelliJ regenerates them on first open.
+.idea/
