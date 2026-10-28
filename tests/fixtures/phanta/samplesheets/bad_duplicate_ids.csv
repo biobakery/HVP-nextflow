@@ -1,0 +1,4 @@
+sample,fastq_1,fastq_2
+sample_a,__TINY_INPUTS__/sample_a_R1.fq.gz,__TINY_INPUTS__/sample_a_R2.fq.gz
+sample_b,__TINY_INPUTS__/sample_b_R1.fq.gz,__TINY_INPUTS__/sample_b_R2.fq.gz
+sample_a,__TINY_INPUTS__/sample_c_R1.fq.gz,__TINY_INPUTS__/sample_c_R2.fq.gz

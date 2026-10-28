@@ -494,14 +494,27 @@ produce", item 1).
 4. Run it again independently and confirm byte-identical output. If anything but
    `.krak` differs, stop and re-derive the ordering contract.
 5. Commit the reviewed outputs to `tests/fixtures/phanta/baseline/` with
-   checksums. Record which order each file carries.
+   checksums. Record which order each file carries. **Done for the TINY
+   database only** — `baseline/tiny_pe/` and `baseline/tiny_se/`, each with a
+   `.provenance.txt` recording the image, tool versions and database checksum
+   that produced it. The full-database baseline still needs the database pinned
+   and AWS.
 6. **DONE.** Write `bin/phanta_compare_outputs.sh` with unit tests. Small
    script, not a framework. Written during phase 2, because proving the port
    needed it; it has been exercised against a real paired-run comparison
    (upstream Snakemake vs. the Nextflow workflow, tiny database) rather than
    against unit tests alone.
-7. Produce and commit a tiny-database baseline so the routine regression can run
-   without the full database.
+7. **DONE.** Produce and commit a tiny-database baseline so the routine
+   regression can run without the full database.
+
+   **Generated locally, not on AWS** — a deliberate deviation from this phase's
+   "both generated on AWS". It comes out of the same pinned image, two
+   independent runs agreed byte-for-byte before it was committed, and it was
+   verified against an upstream Snakemake run in that image. Leaving the entire
+   regression suite blocked on infrastructure that has not been handed over
+   buys nothing. Re-verify on Batch when AWS exists; a difference there is a
+   finding about the environment, not a reason for a tolerance. The
+   full-database baseline is still AWS-first, unchanged.
 
 **Deliverables:** pinned database filename, SHA256, and selection rationale;
 upstream revision and tool manifest including resolved pandas/numpy;
@@ -661,18 +674,21 @@ are not mistaken for a clean bill:
 *Owner: pipeline engineer; acceptance by domain scientist; FASRC run by
 platform engineer.*
 
-**Not started, but partly pre-paid.** Six of the assertions this phase makes
-have already been demonstrated by hand under `-profile local_docker` — the
-tiny-DB byte-identity comparison (case 17), the ineligible-sample behavior
-(case 19), both output orderings (case 20), the fail-fast wrong-database guard
-(case 22), the barrier cardinality (case 23), and resume (case 24, with the
-launcher caveat in phase 2's gate status). What is missing is turning each into
-a `run_tests.sh` case that runs unattended, committing the baselines they
-compare against, and re-running the lot on a real site. Treat the hand-run
-results as evidence the cases will pass, not as the cases.
+**Steps 1-3 done locally; steps 4-7 blocked.** The suite is written and
+passing: `PHANTA_ONLY=1 NF=nextflow PROFILE="-profile local_docker" bash
+tests/run_tests.sh` gives **21 passed, 0 failed** across nine cases, against
+committed baselines and the tiny database. Procedure and fixtures are in
+[phanta_testing.md](phanta_testing.md).
 
-1. Parameterise [tests/run_tests.sh](../tests/run_tests.sh) so one suite runs
-   at both sites: `NF="${NF:-/n/lab_storage/.../nextflow}"`,
+What that does *not* establish: nothing has run on Batch or at FASRC, there is
+no full-database run, and no real cohort has been compared. Those are steps 4-7
+and they need the handover. The suite is parameterised for them — `NF` and
+`PROFILE` are overridable and `PHANTA_ONLY=1` skips the bioBakery cases, which
+have no tool stack on AWS — so running it at a new site should be a matter of
+setting two variables and pointing `phanta_db` somewhere real.
+
+1. **DONE.** Parameterise [tests/run_tests.sh](../tests/run_tests.sh) so one
+   suite runs at both sites: `NF="${NF:-/n/lab_storage/.../nextflow}"`,
    `PROFILE="${PROFILE:--profile harvard_rc}"`, and a `PHANTA_ONLY=1` guard
    that skips the bioBakery cases (which have no tool stack on AWS). Then add
    the Phanta cases per [Appendix E.2](#e2-test-cases) using the existing
@@ -680,9 +696,22 @@ results as evidence the cases will pass, not as the cases.
    `check_identical <name> <baseline_dir>` that calls
    `bin/phanta_compare_outputs.sh`. On AWS:
    `PROFILE="-profile amazon" NF=nextflow PHANTA_ONLY=1 bash tests/run_tests.sh`.
-2. Run the Phanta cases on AWS against the tiny database.
-3. Verify `-resume` on AWS: run the same case twice, confirm scientific tasks
-   are cached.
+
+   **One deviation:** the cases live in
+   [tests/phanta_cases.sh](../tests/phanta_cases.sh), which `run_tests.sh`
+   *sources*. Still one suite, one summary, the same helpers and the same
+   counters — but inlining them would have meant re-indenting four hundred
+   lines of working bioBakery cases inside a `PHANTA_ONLY` conditional, which
+   is a large diff over code that cannot be run on this machine to check it
+   still works. `PHANTA_ONLY=1` short-circuits to the sourced file;
+   `PHANTA=1` appends it to a full run; the default skips it with a note,
+   because the two halves need different prerequisites and neither host has
+   the other's.
+2. Run the Phanta cases on AWS against the tiny database. **Run locally
+   instead — 21 passed, 0 failed under `-profile local_docker`.** AWS still
+   needed.
+3. **DONE locally** (case 24: 22 tasks cached, none re-run). Verify `-resume`
+   on AWS: run the same case twice, confirm scientific tasks are cached.
 4. Run the full-database workflow on AWS. Require byte-identical output against
    the full-database baseline.
 5. **FASRC parity.** Resolve open question 2 first. Pull the ECR digest with
@@ -1164,12 +1193,14 @@ mirrors how upstream ships the real database.
 | `bin/phanta_convert_samplesheet.py` | create — **DONE** | legacy TSV → CSV |
 | `bin/phanta_*.py`, `bin/phanta_calc_total_reads.sh` | create — **DONE** | explicit I/O paths; no derived output names |
 | `bin/phanta_compare_outputs.sh` | create — **DONE** | `diff -r` wrapper; excludes `.krak` and `pipeline_info/`; nonzero on any diff |
-| `tests/run_tests.sh` | modify — **TODO** (phase 3) | `NF`/`PROFILE` env overrides; `PHANTA_ONLY` guard; `check_identical` helper; E.2 cases |
-| `tests/fixtures/phanta/**` | create | tiny DB (or fetch script + checksum), inputs, samplesheets, baselines — **tiny DB and inputs done** (committed, with build script and pinned accessions); samplesheets and baselines still to come |
+| `tests/run_tests.sh` | modify — **DONE** | `NF`/`PROFILE` env overrides; `PHANTA_ONLY` guard; `check_identical` helper; E.2 cases |
+| `tests/fixtures/phanta/**` | create — **DONE** for the tiny database | tiny DB, inputs, samplesheets and baselines all committed, with the build script and pinned accessions. The full-database baseline is still outstanding (phase 1) |
+| `tests/phanta_cases.sh` | create — **DONE**, not in the original plan | the Phanta cases, sourced by `run_tests.sh`; see phase 3 step 1 |
+| `tests/README.md` | modify — **DONE**, not in the original plan | how to run the Phanta cases and why they are opt-in |
 | `docs/diagrams/architecture.mmd`, `docs/diagrams/phanta.mmd`, `docs/workflow_reference.md` | generate — **DONE** | `bin/make_diagrams.py` output committed; `--check` passes |
 | `docs/dependencies.md` | modify — **DONE** | `env_phanta` row in the stack table; `amazon` row updated |
 | `docs/architecture.md` | modify — **DONE** | Phanta entry; stale `version_log` claim fixed |
-| `docs/phanta_testing.md` | create — **TODO** (phase 1) | baseline refresh, full-DB procedure, resolved versions, checksums |
+| `docs/phanta_testing.md` | create — **DONE** | baseline refresh, full-DB procedure, resolved versions, checksums |
 | `README.md` | modify — **DONE** | Phanta in Workflow & I/O, Project Structure, Project Status |
 | `conf/profiles/local_docker.config` | create — **DONE**, not in the original plan | Docker-backed local profile; pins every Phanta process to one image tag. See [Appendix F](#appendix-f-implementation-notes-from-the-port) |
 | `bin/check_profile_resources.py` | modify — **DONE**, not in the original plan | `local_docker` added to `PROFILES`, or the new profile goes unchecked |
@@ -1180,6 +1211,11 @@ mirrors how upstream ships the real database.
 All are `tests/run_tests.sh` cases under `PHANTA_ONLY=1`, run first on AWS
 (`PROFILE="-profile amazon"`) and then on FASRC (default). Numbering continues
 from the existing 16.
+
+**All implemented and passing locally** (21 checks, 0 failures) in
+`tests/phanta_cases.sh`. Case 25 became seven guards rather than four: the
+original list plus a wrong header, a missing samplesheet, and a missing
+`--phanta_db`.
 
 | Case | Asserts |
 | --- | --- |
@@ -1234,20 +1270,21 @@ message naming the parameter if it is left at the default 150.
 
 ## F.2 Structural differences a paired run will always report
 
-`bin/phanta_compare_outputs.sh` reports these five every time. All are by
-design; none indicate a defect, and they are listed in the script itself so
-nobody re-derives them.
+`bin/phanta_compare_outputs.sh` reports these every time. All are by design;
+none indicate a defect, and they are listed in the script itself so nobody
+re-derives them from a diff.
 
 | File | Side | Why |
 | --- | --- | --- |
 | `{samp}.krak.report.filtered.bracken.temp` | upstream only | The zero-byte canary. Replaced by an explicit status record; the zero-byte *products* are still emitted |
 | `{samp}.krak.report_bracken_species.filtered.temp` | upstream only | Same |
 | `{samp}.krak.report.filtered.bracken.scaled.temp` | upstream only | Same |
+| `classification/intermediate/` | upstream only | Upstream moves the filtering decisions and the raw reports here after the fact |
+| `{samp}.krak.report.filtering_decisions.txt`, every sample | ours only | The other half of the row above: we publish the decisions at `classification/` instead of moving them aside, because they are the record of why filtering kept what it kept |
 | `pipeline_completed.txt` | upstream only | Open question 5, answered: excluded |
-| `{samp}.krak.report.filtering_decisions.txt` for an *ineligible* sample | ours only | Upstream stops the chain before writing it. We publish the decisions for every sample, including ones Bracken skips, because they are the record of why filtering kept what it kept |
 
-Everything else — all four tables, every per-sample intermediate, both
-orderings — is byte-identical.
+Everything else — all four tables, every per-sample product both sides publish,
+both orderings — is byte-identical.
 
 ## F.3 Nextflow traps hit during the port
 
@@ -1275,10 +1312,24 @@ normal-looking output.
    for *any* pipeline. Confirm against a hello-world control before concluding
    a workflow's resume is broken. With a properly installed launcher the Phanta
    run gives `cached=23, submitted=0`.
-5. **Nextflow 26.x will not parse `conf/base.config`.** Its stricter config
-   parser rejects the top-level `def check_max(obj, type)`. Repo-wide, not
-   Phanta-specific; `NXF_SYNTAX_PARSER=v1` works around it. Worth fixing
-   properly before anyone upgrades.
+5. **Nextflow 26.x breaks this repo in two separate ways.** Both are
+   repo-wide, not Phanta-specific, and both are worth fixing before anyone
+   upgrades.
+
+   - **It will not parse `conf/base.config`.** The stricter config parser
+     rejects the top-level `def check_max(obj, type)`. `NXF_SYNTAX_PARSER=v1`
+     works around it.
+   - **It renders the DAG differently, and worse.** With the workaround above,
+     `bin/make_diagrams.py --check` reports *every* diagram stale, including
+     workflows nobody has touched. Regenerating under 26 replaces readable
+     nodes with mangled ones — `kraken2("<b>kraken2</b><br/>Kraken2 — classify
+     reads…")` becomes `_kraken2_("<b>"kraken2"</b>")`, losing every
+     description and corrupting the identifiers. **Do not commit diagrams
+     regenerated under Nextflow 26.** On the pinned 24.10.4 the committed
+     diagrams are up to date. This one is a trap with a committing hand
+     attached to it: the check says "regenerate", regenerating appears to
+     work, and the result is wrong. A version guard in `make_diagrams.py`
+     would be cheap insurance.
 
 ## F.4 Provenance detail worth keeping
 

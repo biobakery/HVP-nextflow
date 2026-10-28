@@ -1,0 +1,12 @@
+Taxon_Lineage_with_Names	Taxon_Lineage_with_IDs	sample_b	sample_a
+no rank_root|no rank_root	no rank_1|no rank_1	1.0	1.0
+no rank_root|no rank_cellular organisms	no rank_1|no rank_131567	0.9765441751	0.9274099884
+no rank_root|no rank_cellular organisms|superkingdom_Bacteria	no rank_1|no rank_131567|superkingdom_2	0.5277560594	0.637340302
+no rank_root|no rank_cellular organisms|superkingdom_Bacteria|genus_Mycoplasmoides	no rank_1|no rank_131567|superkingdom_2|genus_2995234	0.5277560594	0.637340302
+no rank_root|no rank_cellular organisms|superkingdom_Bacteria|genus_Mycoplasmoides|species_Mycoplasmoides genitalium	no rank_1|no rank_131567|superkingdom_2|genus_2995234|species_2097	0.5277560594	0.637340302
+no rank_root|no rank_cellular organisms|superkingdom_Archaea	no rank_1|no rank_131567|superkingdom_2157	0.3510555121	0.1739256678
+no rank_root|no rank_cellular organisms|superkingdom_Archaea|species_Methanocaldococcus jannaschii	no rank_1|no rank_131567|superkingdom_2157|species_2190	0.3510555121	0.1739256678
+no rank_root|no rank_cellular organisms|superkingdom_Eukaryota	no rank_1|no rank_131567|superkingdom_2759	0.0977326036	0.1161440186
+no rank_root|no rank_cellular organisms|superkingdom_Eukaryota|species_Saccharomyces cerevisiae	no rank_1|no rank_131567|superkingdom_2759|species_4932	0.0977326036	0.1161440186
+no rank_root|superkingdom_Viruses	no rank_1|superkingdom_10239	0.0234558249	0.0725900116
+no rank_root|superkingdom_Viruses|species_Sinsheimervirus phiX174	no rank_1|superkingdom_10239|species_10847	0.0234558249	0.0725900116

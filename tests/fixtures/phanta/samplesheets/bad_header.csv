@@ -1,0 +1,2 @@
+sample_id,read1,read2
+sample_a,__TINY_INPUTS__/sample_a_R1.fq.gz,__TINY_INPUTS__/sample_a_R2.fq.gz

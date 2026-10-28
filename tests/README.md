@@ -7,12 +7,14 @@ were not in the repo). The nf-test cases are gone and the rest is merged.
 
 ```
 tests/
-├── run_tests.sh              the integration suite — 16 cases, 39 checks
+├── run_tests.sh              the integration suite — 16 bioBakery cases, 39 checks
+├── phanta_cases.sh           the Phanta cases, sourced by run_tests.sh — 9 cases, 21 checks
 ├── submit_tests.sh           run it as a SLURM job
 ├── data/
 │   ├── rawfastq/             two paired-end samples, sub-sampled ECHO reads
 │   ├── single_end_rawfastq/  one single-end file, plus the bioBakery tutorial demo sample
 │   └── tutorial_output/      reference output from the upstream tutorial run
+├── fixtures/phanta/          tiny database, synthetic reads, samplesheets, baselines
 ├── results/                  created by a run — logs, outputs, .status files (gitignored)
 └── work/                     created by a run — one Nextflow work dir per case (gitignored)
 ```
@@ -44,6 +46,40 @@ a failure can be read after the fact.
 It needs the hutlab module environment, Java 21, and a FASRC account that can
 submit to the `hsph` partition — `-profile harvard_rc`. There is no offline
 mode: these tests run the real tools against the real databases.
+
+`NF` and `PROFILE` are overridable, so the same suite runs at more than one
+site:
+
+```bash
+PHANTA_ONLY=1 NF=nextflow PROFILE="-profile local_docker" bash tests/run_tests.sh
+```
+
+## The Phanta cases
+
+Phanta's cases are in `tests/phanta_cases.sh`, which `run_tests.sh` sources —
+one suite, one summary, but a separate file so that adding them did not mean
+re-indenting four hundred lines of working bioBakery cases.
+
+| Invocation | Runs |
+| --- | --- |
+| `PHANTA_ONLY=1 …` | the Phanta cases alone |
+| `PHANTA=1 bash tests/run_tests.sh` | the bioBakery cases, then Phanta |
+| `bash tests/run_tests.sh` | bioBakery only; Phanta skipped with a note |
+
+They are opt-in because the two halves need different things, and neither host
+has the other's prerequisites. The bioBakery cases need the module stack, the
+databases and a cluster. The Phanta cases need a container runtime and the
+committed fixtures — no cluster, no module environment, no 25 GB database:
+
+```bash
+docker build --platform linux/amd64 -t phanta:0.0.5-dev containers/phanta
+```
+
+Unlike every other case here, Phanta's assert **byte-identity** against a
+committed baseline rather than the presence of expected files. Phanta's output
+has to match the upstream tool's exactly, so "a file appeared" is not the
+contract. Procedure, fixtures and how to regenerate a baseline are in
+[docs/phanta_testing.md](../docs/phanta_testing.md).
 
 ### Two fixtures live outside the repo
 
@@ -88,9 +124,11 @@ what needs none of them:
 
 ```bash
 bin/make_diagrams.py --check
+bin/check_profile_resources.py
+nextflow config -profile <p>    # for every profile
 ```
 
-which rebuilds every workflow's DAG with `nextflow run -preview` and fails if
+The first rebuilds every workflow's DAG with `nextflow run -preview` and fails if
 `docs/workflow_reference.md` or `docs/diagrams/*.mmd` no longer match the
 pipeline. That catches a config that does not parse, a broken `include`, a
 channel wired to nothing, and documentation that has drifted from the code —

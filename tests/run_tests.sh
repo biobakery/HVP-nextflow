@@ -35,11 +35,20 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RESULTS_BASE="${REPO_ROOT}/tests/results"
 WORK_BASE="${REPO_ROOT}/tests/work"
-NF="/n/lab_storage/huttenhower_lab/tools/nextflow/24.10.4/bin/nextflow"
+# Both are overridable, so one suite runs at more than one site. The defaults
+# are FASRC's, which is where the bioBakery cases have a tool stack:
+#   PHANTA_ONLY=1 NF=nextflow PROFILE="-profile local_docker" bash tests/run_tests.sh
+NF="${NF:-/n/lab_storage/huttenhower_lab/tools/nextflow/24.10.4/bin/nextflow}"
 # The profile carries the databases and the tool modules; conf/harvard_rc.yaml
 # is a template of commented-out settings and is deliberately not passed, so
 # each test states its own input and nothing is inherited silently.
-PROFILE="-profile harvard_rc"
+PROFILE="${PROFILE:--profile harvard_rc}"
+# The Phanta cases (tests/phanta_cases.sh) need a container runtime and the
+# committed fixtures, where the bioBakery cases need the module stack and a
+# cluster -- so they are opt-in rather than an unrunnable default. PHANTA_ONLY
+# skips straight to them.
+PHANTA_ONLY="${PHANTA_ONLY:-0}"
+PHANTA="${PHANTA:-0}"
 COMMON="--run_viral_profiling false --run_strain_profiling false"
 # Chaining vis/stats is exercised deliberately by tests 3 and 7; the other runs
 # turn it off so a report failure cannot mask the stage they are testing.
@@ -125,6 +134,25 @@ check_files() {
 }
 
 note() { echo ""; echo "=== $* ==="; }
+
+summary() {
+    echo ""
+    echo "========================================"
+    echo "  biobakery-workflows-nextflow ${VERSION}"
+    echo "  Results: ${pass} passed, ${fail} failed"
+    echo "  Logs:    ${RESULTS_BASE}/"
+    echo "========================================"
+    [ "${fail}" -eq 0 ]
+}
+
+# Phanta on its own: the bioBakery cases below need a tool stack that a laptop,
+# a CI runner or an AWS launch host does not have, and running Phanta there
+# should not require pretending otherwise.
+if [ "${PHANTA_ONLY}" = "1" ]; then
+    source "${REPO_ROOT}/tests/phanta_cases.sh"
+    summary
+    exit
+fi
 
 # ── The read-based runs, in parallel ─────────────────────────────────────────
 note "Launching the read-based runs"
@@ -450,11 +478,13 @@ else
     ((fail++))
 fi
 
-# ── Summary ──────────────────────────────────────────────────────────────────
-echo ""
-echo "========================================"
-echo "  biobakery-workflows-nextflow ${VERSION}"
-echo "  Results: ${pass} passed, ${fail} failed"
-echo "  Logs:    ${RESULTS_BASE}/"
-echo "========================================"
-[ "${fail}" -eq 0 ]
+# ── The Phanta cases ─────────────────────────────────────────────────────────
+if [ "${PHANTA}" = "1" ]; then
+    source "${REPO_ROOT}/tests/phanta_cases.sh"
+else
+    note "Phanta cases SKIPPED — set PHANTA=1 (or PHANTA_ONLY=1) to run them"
+    echo "  They need a container runtime, not the module stack:"
+    echo "  docker build --platform linux/amd64 -t phanta:0.0.5-dev containers/phanta"
+fi
+
+summary

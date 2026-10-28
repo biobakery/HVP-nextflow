@@ -1,0 +1,12 @@
+Taxon_Lineage_with_Names	Taxon_Lineage_with_IDs	sample_b	sample_a
+no rank_root|no rank_root	no rank_1|no rank_1	2558	3444
+no rank_root|no rank_cellular organisms	no rank_1|no rank_131567	2498	3194
+no rank_root|no rank_cellular organisms|superkingdom_Bacteria	no rank_1|no rank_131567|superkingdom_2	1350	2195
+no rank_root|no rank_cellular organisms|superkingdom_Bacteria|genus_Mycoplasmoides	no rank_1|no rank_131567|superkingdom_2|genus_2995234	1350	2195
+no rank_root|no rank_cellular organisms|superkingdom_Bacteria|genus_Mycoplasmoides|species_Mycoplasmoides genitalium	no rank_1|no rank_131567|superkingdom_2|genus_2995234|species_2097	1350	2195
+no rank_root|no rank_cellular organisms|superkingdom_Archaea	no rank_1|no rank_131567|superkingdom_2157	898	599
+no rank_root|no rank_cellular organisms|superkingdom_Archaea|species_Methanocaldococcus jannaschii	no rank_1|no rank_131567|superkingdom_2157|species_2190	898	599
+no rank_root|no rank_cellular organisms|superkingdom_Eukaryota	no rank_1|no rank_131567|superkingdom_2759	250	400
+no rank_root|no rank_cellular organisms|superkingdom_Eukaryota|species_Saccharomyces cerevisiae	no rank_1|no rank_131567|superkingdom_2759|species_4932	250	400
+no rank_root|superkingdom_Viruses	no rank_1|superkingdom_10239	60	250
+no rank_root|superkingdom_Viruses|species_Sinsheimervirus phiX174	no rank_1|superkingdom_10239|species_10847	60	250

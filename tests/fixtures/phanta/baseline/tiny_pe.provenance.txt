@@ -1,0 +1,8 @@
+inspect.out.sha256	554c323f5357f20cfd5372350676d1f55e3fc5a209015c0310c2180e7e5e299e
+kmer_distrib.file	database100mers.kmer_distrib
+kraken2.version	Kraken version 2.1.6
+bracken.version	Bracken v3.0.1
+python.version	Python 3.10.22
+pandas.version	2.3.3
+numpy.version	2.2.6
+container	phanta:0.0.5-dev

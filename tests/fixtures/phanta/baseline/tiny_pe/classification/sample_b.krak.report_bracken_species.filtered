@@ -1,0 +1,11 @@
+100.00	2558	0	R	1	root
+97.65	2498	0	R1	131567	  cellular organisms
+52.78	1350	0	D	2	    Bacteria
+52.78	1350	0	G	2995234	      Mycoplasmoides
+52.78	1350	1350	S	2097	        Mycoplasmoides genitalium
+35.11	898	0	D	2157	    Archaea
+35.11	898	898	S	2190	      Methanocaldococcus jannaschii
+9.77	250	0	D	2759	    Eukaryota
+9.77	250	250	S	4932	      Saccharomyces cerevisiae
+2.35	60	0	D	10239	  Viruses
+2.35	60	60	S	10847	    Sinsheimervirus phiX174

@@ -1,0 +1,5 @@
+Taxon_Lineage_with_Names	Taxon_Lineage_with_IDs	sample_b	sample_a
+no rank_root|no rank_cellular organisms|superkingdom_Bacteria|genus_Mycoplasmoides|species_Mycoplasmoides genitalium	no rank_1|no rank_131567|superkingdom_2|genus_2995234|species_2097	0.1542006640347626	0.0723545097629846
+no rank_root|no rank_cellular organisms|superkingdom_Archaea|species_Methanocaldococcus jannaschii	no rank_1|no rank_131567|superkingdom_2157|species_2190	0.0357361116918288	0.0068791754786031
+no rank_root|no rank_cellular organisms|superkingdom_Eukaryota|species_Saccharomyces cerevisiae	no rank_1|no rank_131567|superkingdom_2759|species_4932	0.0719512104876352	0.0332228352643495
+no rank_root|superkingdom_Viruses|species_Sinsheimervirus phiX174	no rank_1|superkingdom_10239|species_10847	0.7381120137857733	0.8875434794940626
