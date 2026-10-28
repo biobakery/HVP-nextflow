@@ -562,8 +562,10 @@ the report was built from, and point a later standalone run straight at it.
 
 | Parameter | Default | Description |
 |---|---|---|
-| `--workflow` | `mgx` | Workflow: `mgx \| mtx \| mgx_mtx \| 16s \| vis \| stats \| assembly` |
-| `--readsdir` | *required* | Directory containing input FASTQ files (all workflows except `mgx_mtx`) |
+| `--workflow` | `mgx` | Workflow: `mgx \| mtx \| mgx_mtx \| 16s \| vis \| stats \| assembly \| phanta` |
+| `--phanta_samplesheet` | *required for `phanta`* | CSV, `sample,fastq_1,fastq_2` with a header row. `phanta` is the one workflow that takes a samplesheet rather than `--readsdir`, because the merged tables' column order follows it. `--paired_end` / `--filepattern` do not apply. |
+| `--phanta_db` | *set per profile* | Phanta Kraken2 + Bracken database |
+| `--readsdir` | *required* | Directory containing input FASTQ files (all workflows except `mgx_mtx` and `phanta`) |
 | `--input_metagenome` | *required for `mgx_mtx`* | Folder of raw metagenome reads |
 | `--input_metatranscriptome` | *required for `mgx_mtx`* | Folder of raw metatranscriptome reads |
 | `--input_mapping` | `null` | `mgx_mtx` only. Tab-delimited `<rna sample>\t<dna sample>` per line, `#` comments allowed. With a mapping, RNA samples reuse the paired DNA sample's MetaPhlAn profile instead of being profiled themselves. |
@@ -1088,6 +1090,14 @@ stack that `tests/run_tests.sh` already exercises.
 
 ## Project Status
 
+**Phanta is in progress** and is not part of the statement below: it is a
+migration of a separate upstream tool rather than of a bioBakery workflow. Its
+scientific scripts are ported and verified byte-identical to upstream, the
+Nextflow layer is wired up and all three CI checks pass, but it has not yet
+been run end to end through Nextflow and its container has not been pushed, so
+no site can run it yet. See
+[docs/phanta_migration_spec.md](docs/phanta_migration_spec.md).
+
 The port from `biobakery_workflows` 3.2 (AnADAMA2) is **feature complete except
 16s**. Every workflow below is verified on the real tool stack for single-end
 and paired-end input by `tests/run_tests.sh` — 39 checks over 16 cases, all
@@ -1145,12 +1155,13 @@ green as of 2026-09-02.
 
 ```
 biobakery-nextflow/
-├── main.nf                              # Router: --workflow mgx|assembly|...
+├── main.nf                              # Router: --workflow mgx|assembly|phanta|...
 ├── workflows/
 │   ├── mgx.nf                           # MGX: QC → taxonomy → function (+ viral/strain optional)
 │   ├── assembly.nf                  # MAG assembly → binning → SGB clustering
 │   ├── mtx.nf                           # MTX: QC (3 kneaddata DBs) + taxonomy + function
 │   ├── mgx_mtx.nf                       # Paired MGX+MTX + RNA/DNA ratio
+│   ├── phanta.nf                        # Phanta: gut virome + bacteria/archaea/euk
 │   ├── sixteens.nf                      # 16S stub
 │   ├── vis.nf                           # Visualization report
 │   └── stats.nf                         # Statistics
@@ -1164,6 +1175,8 @@ biobakery-nextflow/
 │   └── strain_profiling.nf              # StrainPhlAn (SGB mode)
 ├── modules/
 │   ├── kneaddata/main.nf
+│   ├── kraken2/main.nf                  # Phanta step 1
+│   ├── bracken/main.nf                  # Phanta step 3
 │   ├── metaphlan/main.nf                # metaphlan + metaphlan_bzip + metaphlan_merge
 │   ├── humann/main.nf
 │   ├── strainphlan/main.nf              # sample2markers + strainphlan

@@ -63,7 +63,7 @@ the picture cannot drift from the code.
 flowchart TB
     subgraph L1["<b>1 · ENTRY</b> — main.nf<br/><i>Picks the pipeline. Runs no step of its own.</i>"]
         direction LR
-        main_nf(["<b>main.nf</b><br/>Reads <i>--workflow</i> and calls<br/>exactly one workflow below.<br/><br/>16s · assembly · mgx · mgx_mtx · mtx ·<br/>stats · vis"])
+        main_nf(["<b>main.nf</b><br/>Reads <i>--workflow</i> and calls<br/>exactly one workflow below.<br/><br/>16s · assembly · mgx · mgx_mtx · mtx ·<br/>phanta · stats · vis"])
         howto["<b>How to read this</b><br/>Arrows are drawn for one relation only — which<br/>workflow a --workflow token runs. Layers 2 → 4 are<br/>composition, not flow: each box names who calls it,<br/>and repeats that owner as its colour. <i>×n</i> is the<br/>number of steps a module contributes to that owner."]
     end
     subgraph L2["<b>2 · WORKFLOWS</b> — workflows/*.nf<br/><i>One complete pipeline per --workflow token — the thing a user runs. Wires stages, and may run steps of its own.</i>"]
@@ -73,6 +73,7 @@ flowchart TB
         MGX("<b>MGX</b><br/><i>--workflow mgx</i><br/>Whole Metagenome Shotgun (MGX)<br/>workflow<br/><i>wires 6 stages</i><br/>· QUALITY_CONTROL<br/>· TAXONOMIC_PROFILING<br/>· FUNCTIONAL_PROFILING<br/>· VIRAL_PROFILING<br/>· STRAIN_PROFILING<br/>· REPORTING<br/><i>+ 3 steps of its own</i>")
         MGX_MTX("<b>MGX_MTX</b><br/><i>--workflow mgx_mtx</i><br/>Paired whole metagenome +<br/>metatranscriptome workflow.<br/><i>wires 5 stages</i><br/>· QUALITY_CONTROL<br/>· TAXONOMIC_PROFILING<br/>· FUNCTIONAL_PROFILING<br/>· STRAIN_PROFILING<br/>· REPORTING<br/><i>+ 5 steps of its own</i>")
         MTX("<b>MTX</b><br/><i>--workflow mtx</i><br/>Whole Metatranscriptome (MTX)<br/>workflow.<br/><i>wires 5 stages</i><br/>· QUALITY_CONTROL<br/>· TAXONOMIC_PROFILING<br/>· FUNCTIONAL_PROFILING<br/>· STRAIN_PROFILING<br/>· REPORTING<br/><i>+ 3 steps of its own</i>")
+        PHANTA("<b>PHANTA</b><br/><i>--workflow phanta</i><br/>Phanta — read-level taxonomic<br/>profiling including the gut virome<br/><i>+ 11 steps of its own</i>")
         STATS("<b>STATS</b><br/><i>--workflow stats</i><br/>Statistics workflow — the Nextflow<br/>port of biobakery_workflows stats.<br/><i>+ 14 steps of its own</i>")
         VIS("<b>VIS</b><br/><i>--workflow vis</i><br/>Visualization workflow — the<br/>Nextflow port of<br/>biobakery_workflows vis.<br/><i>+ 7 steps of its own</i>")
     end
@@ -91,14 +92,15 @@ flowchart TB
         direction LR
         mods0["<b>for ASSEMBLY</b><br/>assembly/megahit <i>×1</i><br/>binning/metabat2 <i>×1</i><br/>phylogenomics/phylophlan_metagenomic <i>×2</i><br/>qc/checkm2 <i>×4</i><br/>utils/abundance <i>×1</i><br/>utils/align_and_depth <i>×1</i><br/>utils/mash <i>×6</i>"]
         mods1["<b>for MGX_MTX</b><br/>utils/rna_dna_norm <i>×1</i>"]
-        mods2["<b>for STATS</b><br/>stats/beta_diversity <i>×2</i><br/>stats/covariate_equation <i>×1</i><br/>stats/halla <i>×2</i><br/>stats/maaslin2 <i>×1</i><br/>stats/mantel <i>×1</i><br/>stats/report <i>×1</i><br/>stats/stratified_pathways <i>×2</i>"]
-        mods3["<b>for VIS</b><br/>vis/add_ec_names <i>×1</i><br/>vis/alpha_diversity <i>×1</i><br/>vis/report <i>×1</i>"]
-        mods4["<b>for QUALITY_CONTROL</b><br/>kneaddata <i>×3</i>"]
-        mods5["<b>for TAXONOMIC_PROFILING</b><br/>metaphlan <i>×4</i>"]
-        mods6["<b>for FUNCTIONAL_PROFILING</b><br/>humann <i>×1</i><br/>utils/humann_merge <i>×5</i><br/>utils/humann_regroup <i>×2</i><br/>utils/humann_rename <i>×1</i><br/>utils/humann_renorm <i>×1</i>"]
-        mods7["<b>for VIRAL_PROFILING</b><br/>viral/baqlava <i>×1</i>"]
-        mods8["<b>for STRAIN_PROFILING</b><br/>strainphlan <i>×2</i>"]
-        mods_shared["<b>called by more than one</b><br/>stats/feature_table<br/>&nbsp;&nbsp;<i>STATS, VIS</i><br/>utils/archive<br/>&nbsp;&nbsp;<i>STATS, VIS</i><br/>utils/merge_pairs<br/>&nbsp;&nbsp;<i>MGX, MGX_MTX, MTX</i><br/>utils/report_input<br/>&nbsp;&nbsp;<i>MGX, MGX_MTX, MTX</i><br/>utils/version_log<br/>&nbsp;&nbsp;<i>ASSEMBLY, MGX, MGX_MTX, MTX</i><br/>vis/identify_inputs<br/>&nbsp;&nbsp;<i>STATS, VIS</i>"]
+        mods2["<b>for PHANTA</b><br/>bracken <i>×1</i><br/>kraken2 <i>×1</i><br/>taxonomy/phanta_filter <i>×1</i><br/>taxonomy/phanta_scale <i>×1</i><br/>utils/phanta_db_manifest <i>×1</i><br/>utils/phanta_failed_samples <i>×1</i><br/>utils/phanta_merge_tables <i>×1</i><br/>utils/phanta_normalize_counts <i>×1</i><br/>utils/phanta_prepare_counts <i>×2</i>"]
+        mods3["<b>for STATS</b><br/>stats/beta_diversity <i>×2</i><br/>stats/covariate_equation <i>×1</i><br/>stats/halla <i>×2</i><br/>stats/maaslin2 <i>×1</i><br/>stats/mantel <i>×1</i><br/>stats/report <i>×1</i><br/>stats/stratified_pathways <i>×2</i>"]
+        mods4["<b>for VIS</b><br/>vis/add_ec_names <i>×1</i><br/>vis/alpha_diversity <i>×1</i><br/>vis/report <i>×1</i>"]
+        mods5["<b>for QUALITY_CONTROL</b><br/>kneaddata <i>×3</i>"]
+        mods6["<b>for TAXONOMIC_PROFILING</b><br/>metaphlan <i>×4</i>"]
+        mods7["<b>for FUNCTIONAL_PROFILING</b><br/>humann <i>×1</i><br/>utils/humann_merge <i>×5</i><br/>utils/humann_regroup <i>×2</i><br/>utils/humann_rename <i>×1</i><br/>utils/humann_renorm <i>×1</i>"]
+        mods8["<b>for VIRAL_PROFILING</b><br/>viral/baqlava <i>×1</i>"]
+        mods9["<b>for STRAIN_PROFILING</b><br/>strainphlan <i>×2</i>"]
+        mods_shared["<b>called by more than one</b><br/>stats/feature_table<br/>&nbsp;&nbsp;<i>STATS, VIS</i><br/>utils/archive<br/>&nbsp;&nbsp;<i>STATS, VIS</i><br/>utils/merge_pairs<br/>&nbsp;&nbsp;<i>MGX, MGX_MTX, MTX</i><br/>utils/report_input<br/>&nbsp;&nbsp;<i>MGX, MGX_MTX, MTX</i><br/>utils/version_log<br/>&nbsp;&nbsp;<i>ASSEMBLY, MGX, MGX_MTX, MTX, PHANTA</i><br/>vis/identify_inputs<br/>&nbsp;&nbsp;<i>STATS, VIS</i>"]
     end
 
     main_nf --> SIXTEENS
@@ -106,10 +108,11 @@ flowchart TB
     main_nf --> MGX
     main_nf --> MGX_MTX
     main_nf --> MTX
+    main_nf --> PHANTA
     main_nf --> STATS
     main_nf --> VIS
 
-    MGX_MTX ~~~ VIRAL_PROFILING
+    MTX ~~~ VIRAL_PROFILING
     VIRAL_PROFILING ~~~ mods0
 
     style L1 fill:#f8fafc00,stroke:#cbd5e1,stroke-width:1px,stroke-dasharray:6 4,color:#334155
@@ -131,47 +134,51 @@ flowchart TB
     class MGX_MTX arch3
     classDef arch4 fill:#f1f5f9,stroke:#94a3b8,stroke-width:1.5px,color:#334155
     class MTX arch4
-    classDef arch5 fill:#e0e7ff,stroke:#6366f1,stroke-width:1.5px,color:#312e81
-    class STATS arch5
-    classDef arch6 fill:#fce7f3,stroke:#ec4899,stroke-width:1.5px,color:#831843
-    class VIS arch6
-    classDef arch7 fill:#dbeafe,stroke:#3b82f6,stroke-width:1.5px,color:#1e3a8a
-    class QUALITY_CONTROL arch7
-    classDef arch8 fill:#dcfce7,stroke:#22c55e,stroke-width:1.5px,color:#14532d
-    class TAXONOMIC_PROFILING arch8
-    classDef arch9 fill:#ede9fe,stroke:#8b5cf6,stroke-width:1.5px,color:#4c1d95
-    class FUNCTIONAL_PROFILING arch9
-    classDef arch10 fill:#ffedd5,stroke:#f97316,stroke-width:1.5px,color:#7c2d12
-    class VIRAL_PROFILING arch10
-    classDef arch11 fill:#ccfbf1,stroke:#14b8a6,stroke-width:1.5px,color:#134e4a
-    class STRAIN_PROFILING arch11
-    classDef arch12 fill:#f1f5f9,stroke:#94a3b8,stroke-width:1.5px,color:#334155
-    class REPORTING arch12
+    classDef arch5 fill:#f1f5f9,stroke:#94a3b8,stroke-width:1.5px,color:#334155
+    class PHANTA arch5
+    classDef arch6 fill:#e0e7ff,stroke:#6366f1,stroke-width:1.5px,color:#312e81
+    class STATS arch6
+    classDef arch7 fill:#fce7f3,stroke:#ec4899,stroke-width:1.5px,color:#831843
+    class VIS arch7
+    classDef arch8 fill:#dbeafe,stroke:#3b82f6,stroke-width:1.5px,color:#1e3a8a
+    class QUALITY_CONTROL arch8
+    classDef arch9 fill:#dcfce7,stroke:#22c55e,stroke-width:1.5px,color:#14532d
+    class TAXONOMIC_PROFILING arch9
+    classDef arch10 fill:#ede9fe,stroke:#8b5cf6,stroke-width:1.5px,color:#4c1d95
+    class FUNCTIONAL_PROFILING arch10
+    classDef arch11 fill:#ffedd5,stroke:#f97316,stroke-width:1.5px,color:#7c2d12
+    class VIRAL_PROFILING arch11
+    classDef arch12 fill:#ccfbf1,stroke:#14b8a6,stroke-width:1.5px,color:#134e4a
+    class STRAIN_PROFILING arch12
+    classDef arch13 fill:#f1f5f9,stroke:#94a3b8,stroke-width:1.5px,color:#334155
+    class REPORTING arch13
     classDef mod0 fill:#fef3c799,stroke:#d97706,stroke-width:1px,color:#78350f
     class mods0 mod0
     classDef mod1 fill:#f1f5f999,stroke:#94a3b8,stroke-width:1px,color:#334155
     class mods1 mod1
-    classDef mod2 fill:#e0e7ff99,stroke:#6366f1,stroke-width:1px,color:#312e81
+    classDef mod2 fill:#f1f5f999,stroke:#94a3b8,stroke-width:1px,color:#334155
     class mods2 mod2
-    classDef mod3 fill:#fce7f399,stroke:#ec4899,stroke-width:1px,color:#831843
+    classDef mod3 fill:#e0e7ff99,stroke:#6366f1,stroke-width:1px,color:#312e81
     class mods3 mod3
-    classDef mod4 fill:#dbeafe99,stroke:#3b82f6,stroke-width:1px,color:#1e3a8a
+    classDef mod4 fill:#fce7f399,stroke:#ec4899,stroke-width:1px,color:#831843
     class mods4 mod4
-    classDef mod5 fill:#dcfce799,stroke:#22c55e,stroke-width:1px,color:#14532d
+    classDef mod5 fill:#dbeafe99,stroke:#3b82f6,stroke-width:1px,color:#1e3a8a
     class mods5 mod5
-    classDef mod6 fill:#ede9fe99,stroke:#8b5cf6,stroke-width:1px,color:#4c1d95
+    classDef mod6 fill:#dcfce799,stroke:#22c55e,stroke-width:1px,color:#14532d
     class mods6 mod6
-    classDef mod7 fill:#ffedd599,stroke:#f97316,stroke-width:1px,color:#7c2d12
+    classDef mod7 fill:#ede9fe99,stroke:#8b5cf6,stroke-width:1px,color:#4c1d95
     class mods7 mod7
-    classDef mod8 fill:#ccfbf199,stroke:#14b8a6,stroke-width:1px,color:#134e4a
+    classDef mod8 fill:#ffedd599,stroke:#f97316,stroke-width:1px,color:#7c2d12
     class mods8 mod8
+    classDef mod9 fill:#ccfbf199,stroke:#14b8a6,stroke-width:1px,color:#134e4a
+    class mods9 mod9
     classDef modshared fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray:4 3,color:#334155
     class mods_shared modshared
     classDef helper fill:#ffffff,stroke:#cbd5e1,stroke-width:1px,color:#475569
     class mtx_common,read_input helper
 
     linkStyle default stroke:#94a3b8,stroke-width:1.5px
-    linkStyle 7,8 stroke-width:0px
+    linkStyle 8,9 stroke-width:0px
 ```
 
 | Workflow | `--workflow` | What it does | Steps |
@@ -180,6 +187,7 @@ flowchart TB
 | [mtx](#mtx) | `mtx` | Whole metatranscriptome shotgun | 27 |
 | [mgx_mtx](#mgx_mtx) | `mgx_mtx` | Paired metagenome + metatranscriptome | 28 |
 | [assembly](#assembly) | `assembly` | MAG assembly, binning and SGB clustering | 20 |
+| [phanta](#phanta) | `phanta` | Phanta taxonomic profiling | 11 |
 | [vis](#vis) | `vis` | Visualisation report | 6 |
 | [stats](#stats) | `stats` | Statistical analysis report | 13 |
 
@@ -812,6 +820,73 @@ flowchart LR
 | `phylophlan_metagenomic` | PhyloPhlAn metagenomic — phylogenetic placement of MAGs to nearest SGBs/GGBs/FGBs | `modules/phylogenomics/phylophlan_metagenomic/main.nf` | `<outdir>/phylophlan/<sample>` |
 | `sgb_cluster` | Cluster MAGs into SGBs using Mash distances + CheckM/PhyloPhlAn metadata | `modules/utils/mash/main.nf` | `<outdir>/sgbs/sgbs` |
 | `single_end_kneaddata` | KneadData QC — single-end reads | `modules/kneaddata/main.nf` | `<outdir>/<subdir>kneaddata` |
+| `version_log` | Capture tool versions, database paths, and workflow parameters for reproducibility | `modules/utils/version_log/main.nf` | `<outdir>/pipeline_info` |
+
+## phanta
+
+Phanta taxonomic profiling.
+
+```mermaid
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 40,
+                        "rankSpacing": 70, "padding": 8}}}%%
+flowchart LR
+    subgraph PHANTA
+        direction TB
+        phanta_db_manifest(["<b>phanta_db_manifest</b><br/>Record which database this run<br/>used, and refuse to run…"])
+        version_log(["<b>version_log</b><br/>Capture tool versions,<br/>database paths, and workflow…"])
+        kraken2("<b>kraken2</b><br/>Kraken2 — classify reads<br/>against the Phanta database")
+        phanta_filter("<b>phanta_filter</b><br/>Filter false-positive species,<br/>and decide whether Bracken can…")
+        bracken("<b>bracken</b><br/>Bracken — re-estimate species<br/>abundance from the filtered…")
+        phanta_scale("<b>phanta_scale</b><br/>Scale a Bracken table by<br/>genome length")
+        phanta_failed_samples("<b>phanta_failed_samples</b><br/>Cohort barrier — the list of<br/>samples Bracken could not…")
+        phanta_prepare_counts("<b>phanta_prepare_counts</b><br/>Build one sample's mergeable<br/>counts table and its…")
+        phanta_total_reads("<b>phanta_total_reads</b><br/>Cohort barrier — assemble<br/>total_reads.tsv, rows sorted…")
+        phanta_normalize_counts("<b>phanta_normalize_counts</b><br/>Normalise one sample's counts<br/>by its Bracken-classified read…")
+        phanta_merge_tables["<b>phanta_merge_tables</b><br/>Merge the per-sample tables<br/>into the three cohort tables"]
+    end
+
+    phanta_db_manifest --> kraken2
+    phanta_db_manifest --> phanta_filter
+    phanta_db_manifest --> bracken
+    phanta_db_manifest --> phanta_scale
+    phanta_db_manifest --> phanta_prepare_counts
+    phanta_db_manifest --> phanta_merge_tables
+    kraken2 --> phanta_filter
+    kraken2 --> phanta_prepare_counts
+    phanta_filter --> bracken
+    phanta_filter --> phanta_scale
+    phanta_filter --> phanta_failed_samples
+    bracken --> phanta_scale
+    bracken --> phanta_prepare_counts
+    phanta_scale --> phanta_merge_tables
+    phanta_failed_samples --> phanta_prepare_counts
+    phanta_failed_samples --> phanta_normalize_counts
+    phanta_prepare_counts --> phanta_total_reads
+    phanta_prepare_counts --> phanta_normalize_counts
+    phanta_prepare_counts --> phanta_merge_tables
+    phanta_total_reads --> phanta_normalize_counts
+    phanta_normalize_counts --> phanta_merge_tables
+
+    style PHANTA fill:#f1f5f922,stroke:#94a3b8,stroke-width:1px,stroke-dasharray:4 3,color:#94a3b8
+
+    classDef stage0 fill:#f1f5f9,stroke:#94a3b8,stroke-width:1.5px,color:#334155
+    class phanta_db_manifest,version_log,kraken2,phanta_filter,bracken,phanta_scale,phanta_failed_samples,phanta_prepare_counts,phanta_total_reads,phanta_normalize_counts,phanta_merge_tables stage0
+
+    linkStyle default stroke:#cbd5e1,stroke-width:1.5px
+```
+
+| Step | What it does | Defined in | Publishes to |
+|---|---|---|---|
+| `bracken` | Bracken — re-estimate species abundance from the filtered report | `modules/bracken/main.nf` | `<outdir>/phanta/classification` |
+| `kraken2` | Kraken2 — classify reads against the Phanta database | `modules/kraken2/main.nf` | `<outdir>/phanta/classification` |
+| `phanta_db_manifest` | Record which database this run used, and refuse to run against the wrong one | `modules/utils/phanta_db_manifest/main.nf` | `<outdir>/pipeline_info` |
+| `phanta_failed_samples` | Cohort barrier — the list of samples Bracken could not process | `modules/utils/phanta_failed_samples/main.nf` | `<outdir>/phanta/classification` |
+| `phanta_filter` | Filter false-positive species, and decide whether Bracken can run | `modules/taxonomy/phanta_filter/main.nf` | `<outdir>/phanta/classification` |
+| `phanta_merge_tables` | Merge the per-sample tables into the three cohort tables | `modules/utils/phanta_merge_tables/main.nf` | `<outdir>/phanta/final_merged_outputs` |
+| `phanta_normalize_counts` | Normalise one sample's counts by its Bracken-classified read total | `modules/utils/phanta_normalize_counts/main.nf` | `<outdir>/phanta/classification` |
+| `phanta_prepare_counts` | Build one sample's mergeable counts table and its read-accounting row | `modules/utils/phanta_prepare_counts/main.nf` | `<outdir>/phanta/classification` |
+| `phanta_scale` | Scale a Bracken table by genome length | `modules/taxonomy/phanta_scale/main.nf` | `<outdir>/phanta/classification` |
+| `phanta_total_reads` | Cohort barrier — assemble total_reads.tsv, rows sorted by sample name | `modules/utils/phanta_prepare_counts/main.nf` | `<outdir>/phanta/final_merged_outputs` |
 | `version_log` | Capture tool versions, database paths, and workflow parameters for reproducibility | `modules/utils/version_log/main.nf` | `<outdir>/pipeline_info` |
 
 ## vis

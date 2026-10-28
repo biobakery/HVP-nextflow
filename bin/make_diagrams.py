@@ -38,6 +38,7 @@ STUB_DBS = [
     "--metaphlan_db", "/stub/metaphlan",
     "--humann_db", "/stub/humann",
     "--phylophlan_path", "/stub/phylophlan",
+    "--phanta_db", "/stub/phanta",
 ]
 
 WORKFLOWS = [
@@ -50,6 +51,9 @@ WORKFLOWS = [
     ]),
     ("assembly", "MAG assembly, binning and SGB clustering", [
         "--workflow", "assembly", "--readsdir", "{reads}",
+    ]),
+    ("phanta", "Phanta taxonomic profiling", [
+        "--workflow", "phanta", "--phanta_samplesheet", "{samplesheet}",
     ]),
     ("vis", "Visualisation report", ["--workflow", "vis", "--vis_input", "{folder}"]),
     ("stats", "Statistical analysis report", [
@@ -689,7 +693,8 @@ def architecture_diagram():
 
 def render_dag(workflow, args, outfile, stubs):
     """Run one `-preview -with-dag` and write the raw Mermaid to outfile."""
-    filled = [a.format(reads=stubs["reads"], folder=stubs["folder"]) for a in args]
+    filled = [a.format(reads=stubs["reads"], folder=stubs["folder"],
+                       samplesheet=stubs["samplesheet"]) for a in args]
     command = [
         "nextflow", "-quiet", "run", os.path.join(REPO, "main.nf"),
         "-preview", "-with-dag", outfile,
@@ -850,7 +855,20 @@ def make_stubs(work):
     for name in ("STUB_S1_R1.fastq.gz", "STUB_S1_R2.fastq.gz"):
         open(os.path.join(reads, name), "a").close()
     open(os.path.join(folder, "metadata.tsv"), "a").close()
-    return {"work": work, "reads": reads, "folder": folder}
+
+    # Phanta takes a samplesheet rather than a reads directory, so it needs a
+    # stub of its own. It points at the stub reads above, which are empty files:
+    # -preview never runs a task, and both the main.nf guard and the parser in
+    # workflows/phanta.nf deliberately check only that the sheet exists and
+    # parses, leaving FASTQ existence to be checked inside the task.
+    samplesheet = os.path.join(work, "phanta_samples.csv")
+    with open(samplesheet, "w") as handle:
+        handle.write("sample,fastq_1,fastq_2\n")
+        for sample in ("STUB_S1", "STUB_S2"):
+            handle.write("%s,%s/STUB_S1_R1.fastq.gz,%s/STUB_S1_R2.fastq.gz\n"
+                         % (sample, reads, reads))
+
+    return {"work": work, "reads": reads, "folder": folder, "samplesheet": samplesheet}
 
 
 def main():

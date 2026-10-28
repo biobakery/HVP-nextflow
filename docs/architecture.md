@@ -12,7 +12,7 @@
 
 | Component | Details |
 |---|---|
-| Multi-workflow router | `main.nf` routes via `--workflow mgx\|mtx\|mgx_mtx\|16s\|vis\|stats\|assembly` |
+| Multi-workflow router | `main.nf` routes via `--workflow mgx\|mtx\|mgx_mtx\|16s\|vis\|stats\|assembly\|phanta` |
 | nf-core-style module layout | `modules/` → `subworkflows/` → `workflows/` layering |
 | MGX workflow | KneadData → MetaPhlAn → HUMAnN → regroup/rename/merge → BAQLaVa (opt) → StrainPhlAn (opt) |
 | SGB pipeline workflow | KneadData → MEGAHIT → Bowtie2+depth → MetaBAT2 → CheckM2 → PhyloPhlAn → Mash → SGB clustering |
@@ -22,7 +22,7 @@
 | BAQLaVa viral profiling | `subworkflows/viral_profiling.nf`; `--run_viral_profiling` |
 | MetaPhlAn version abstraction | `metaphlan_v3` / `metaphlan_v4` / `metaphlan_4.0.6_fixed` CLI flag styles |
 | HUMAnN 3/4 compatibility | `--utility-database` conditional; v37 vs v4a output renaming |
-| Version logging | `modules/utils/version_log/main.nf` → `results/pipeline_info/versions.txt` + `db_paths.txt` |
+| Version logging | `modules/utils/version_log/main.nf` → `results/pipeline_info/pipeline_log.txt` |
 | Harvard FASRC (HSPH) profile | `hsph` SLURM partition, hutlab module integration, DB paths in `conf/databases/harvard_rc.config` |
 | Tufts HPC profile | Apptainer/SLURM, DB paths in `conf/databases/tufts.config` |
 | AWS Batch profile | Per-process ECR containers, S3 I/O |
@@ -49,6 +49,7 @@ biobakery-nextflow/
 │   ├── mgx.nf                           # Whole metagenome shotgun ✅
 │   ├── assembly.nf                  # MAG assembly → SGB clustering ✅
 │   ├── mgx_mtx.nf                       # MGX + MTX joint, RNA/DNA ratio ✅
+│   ├── phanta.nf                       # Phanta: gut virome + bacteria/archaea/euk ✅
 │   ├── mtx.nf                           # Metatranscriptome ✅
 │   ├── sixteens.nf                      # 16S amplicon 🔜
 │   ├── vis.nf                           # Quarto report generation 🔜
@@ -83,6 +84,9 @@ biobakery-nextflow/
 │       ├── humann_rename/main.nf
 │       ├── humann_merge/main.nf
 │       └── version_log/main.nf          # Tool + DB version capture → pipeline_info/
+│   (Phanta adds: kraken2/, bracken/, taxonomy/phanta_filter/, taxonomy/phanta_scale/,
+│    utils/phanta_db_manifest/, utils/phanta_failed_samples/, utils/phanta_prepare_counts/,
+│    utils/phanta_normalize_counts/, utils/phanta_merge_tables/)
 │
 ├── conf/
 │   ├── base.config                      # Default resources + check_max() closure
@@ -384,7 +388,7 @@ withName: humann {
 }
 ```
 
-Available `withName` blocks: `single_end_kneaddata`, `paired_end_kneaddata`, `metaphlan`, `metaphlan_bzip`, `metaphlan_merge`, `humann`, `humann_regroup`, `humann_rename`, `humann_merge`, `baqlava`, `sample2markers`, `strainphlan`, `megahit`, `align_and_depth`, `metabat2`, `checkm2`, `checkm2_merge`, `mag_n50`, `checkm2_wrangling`, `phylophlan_metagenomic`, `phylophlan_merge`, `mash_sketch`, `mash_paste`, `mash_dist`, `sgb_cluster`, `merge_tax_abundance`, `version_log`.
+Available `withName` blocks: `single_end_kneaddata`, `paired_end_kneaddata`, `metaphlan`, `metaphlan_bzip`, `metaphlan_merge`, `humann`, `humann_regroup`, `humann_rename`, `humann_merge`, `baqlava`, `sample2markers`, `strainphlan`, `megahit`, `align_and_depth`, `metabat2`, `checkm2`, `checkm2_merge`, `mag_n50`, `checkm2_wrangling`, `phylophlan_metagenomic`, `phylophlan_merge`, `mash_sketch`, `mash_paste`, `mash_dist`, `sgb_cluster`, `merge_tax_abundance`, `version_log`, `kraken2`, `bracken`, `phanta_db_manifest`, `phanta_filter`, `phanta_scale`, `phanta_failed_samples`, `phanta_prepare_counts`, `phanta_total_reads`, `phanta_normalize_counts`, `phanta_merge_tables`.
 
 ---
 
@@ -520,3 +524,49 @@ These are auto-applied when using `-profile harvard_rc`. Override any on the CLI
 |---|---|
 | `/n/lab_storage/huttenhower_lab/tools/nextflow/24.10.4/bin/nextflow` | Nextflow binary |
 | `rocky8/biobakery-workflows-nextflow/0.0.1` | Hutlab module file |
+
+## Phanta
+
+Phanta is the one workflow that does not take `--readsdir`. It takes a
+samplesheet:
+
+```bash
+nextflow run main.nf -profile <site> \
+  --workflow phanta \
+  --phanta_samplesheet samples.csv \
+  --outdir results
+```
+
+`samples.csv` is `sample,fastq_1,fastq_2` with a header row; `fastq_2` is empty
+for single-end samples, and the whole cohort must be one layout. Convert
+Phanta's own tab-delimited sample file with
+`bin/phanta_convert_samplesheet.py`.
+
+The reason for the second input model is order. The three merged tables put
+their sample columns in samplesheet order, and filename globbing cannot express
+an order. The cost is real — two input conventions in one repository — and
+unifying them is deferred, not denied.
+
+Two properties are worth knowing before reading the diagram:
+
+**The dataflow is not a straight per-sample chain.** Two cohort-level files feed
+back into per-sample steps, so it fans out, in, out, in, out, in:
+`phanta_prepare_counts` needs the cohort's `samples_that_failed_bracken.txt`,
+and `phanta_normalize_counts` needs the cohort's `total_reads.tsv`.
+
+**Two different output orders coexist, and both match upstream.** The merged
+tables follow the samplesheet; `total_reads.tsv` rows are sorted by sample name.
+Nothing canonicalises this after the fact — each file's order is fixed by the
+process that writes it.
+
+A sample that Bracken cannot process is not an error. Its Bracken table,
+species report, scaled table and normalised counts are all genuinely empty
+files, it is listed in `samples_that_failed_bracken.txt`, and it is absent from
+the merged tables' columns rather than present as zeros. That is upstream's
+observable contract, preserved deliberately.
+
+Every run writes `pipeline_info/phanta_db_manifest.txt` recording which database
+produced the result — upstream records nothing, which is why its own
+default-database ambiguity cannot be settled from existing outputs. When
+`phanta_db_expected_inspect_sha256` is set, a mismatch fails the run before any
+Kraken2 task starts.

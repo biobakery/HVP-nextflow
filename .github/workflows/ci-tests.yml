@@ -35,7 +35,7 @@ jobs:
 
       - name: Check every profile parses
         run: |
-          for profile in local harvard_rc tufts_hpc amazon; do
+          for profile in local local_docker harvard_rc tufts_hpc amazon; do
             echo "== -profile $profile"
             nextflow config -profile "$profile" > /dev/null
           done

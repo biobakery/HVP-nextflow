@@ -39,7 +39,7 @@
 
 ### Which workflow
 
-# mgx (default) | mtx | mgx_mtx | 16s | vis | stats | assembly
+# mgx (default) | mtx | mgx_mtx | 16s | vis | stats | assembly | phanta
 # workflow: "mgx"
 
 # mgx_mtx takes two input folders instead of readsdir, plus an optional file
@@ -85,3 +85,40 @@
 # sgb_contamination:         10          # maximum MAG contamination %
 # megahit_min_contig_length: 2500
 # sgb_abundance_type:        "by_sample" # or by_dataset
+
+### Phanta workflow
+
+# Phanta profiles the gut virome alongside bacteria, archaea and eukaryotes,
+# and is selected with --workflow phanta. It is the one workflow that takes a
+# SAMPLESHEET instead of readsdir, because the merged tables' sample column
+# order follows the samplesheet and filename globbing cannot express an order.
+#
+# So the Library layout settings above -- paired_end, single_end, filepattern,
+# pair_identifier -- DO NOT APPLY to Phanta. Layout comes from whether a row
+# has a fastq_2 value, and the whole cohort must be the same.
+#
+# The samplesheet is a CSV with this exact header:
+#   sample,fastq_1,fastq_2
+# Leave fastq_2 empty for single-end samples. To convert Phanta's own
+# tab-delimited sample file: bin/phanta_convert_samplesheet.py
+#
+# phanta_samplesheet: "/path/to/samples.csv"
+
+# Thresholds. These are upstream Phanta's defaults; the asymmetry is deliberate,
+# since a spurious hit covers a far larger fraction of a small viral genome than
+# of a bacterial one. Both the coverage and the minimizer threshold must be
+# passed for a species to be kept.
+# phanta_cov_thresh_viral:     0.10
+# phanta_cov_thresh_bacterial: 0.01
+# phanta_cov_thresh_arc:       0.01
+# phanta_cov_thresh_euk:       0
+
+# read_length must match a Bracken distribution the database actually ships
+# (databaseNmers.kmer_distrib); a mismatch is reported before any Kraken2 task.
+# phanta_read_length:   150
+# phanta_filter_thresh: 10
+# phanta_confidence:    0.1
+
+# Keep the stable per-sample intermediates as well as the four cohort tables.
+# Nothing is ever deleted either way -- this only controls what is published.
+# save_intermediate: false

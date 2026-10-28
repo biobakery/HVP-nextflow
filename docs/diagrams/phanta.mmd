@@ -1,0 +1,46 @@
+%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 40,
+                        "rankSpacing": 70, "padding": 8}}}%%
+flowchart LR
+    subgraph PHANTA
+        direction TB
+        phanta_db_manifest(["<b>phanta_db_manifest</b><br/>Record which database this run<br/>used, and refuse to run…"])
+        version_log(["<b>version_log</b><br/>Capture tool versions,<br/>database paths, and workflow…"])
+        kraken2("<b>kraken2</b><br/>Kraken2 — classify reads<br/>against the Phanta database")
+        phanta_filter("<b>phanta_filter</b><br/>Filter false-positive species,<br/>and decide whether Bracken can…")
+        bracken("<b>bracken</b><br/>Bracken — re-estimate species<br/>abundance from the filtered…")
+        phanta_scale("<b>phanta_scale</b><br/>Scale a Bracken table by<br/>genome length")
+        phanta_failed_samples("<b>phanta_failed_samples</b><br/>Cohort barrier — the list of<br/>samples Bracken could not…")
+        phanta_prepare_counts("<b>phanta_prepare_counts</b><br/>Build one sample's mergeable<br/>counts table and its…")
+        phanta_total_reads("<b>phanta_total_reads</b><br/>Cohort barrier — assemble<br/>total_reads.tsv, rows sorted…")
+        phanta_normalize_counts("<b>phanta_normalize_counts</b><br/>Normalise one sample's counts<br/>by its Bracken-classified read…")
+        phanta_merge_tables["<b>phanta_merge_tables</b><br/>Merge the per-sample tables<br/>into the three cohort tables"]
+    end
+
+    phanta_db_manifest --> kraken2
+    phanta_db_manifest --> phanta_filter
+    phanta_db_manifest --> bracken
+    phanta_db_manifest --> phanta_scale
+    phanta_db_manifest --> phanta_prepare_counts
+    phanta_db_manifest --> phanta_merge_tables
+    kraken2 --> phanta_filter
+    kraken2 --> phanta_prepare_counts
+    phanta_filter --> bracken
+    phanta_filter --> phanta_scale
+    phanta_filter --> phanta_failed_samples
+    bracken --> phanta_scale
+    bracken --> phanta_prepare_counts
+    phanta_scale --> phanta_merge_tables
+    phanta_failed_samples --> phanta_prepare_counts
+    phanta_failed_samples --> phanta_normalize_counts
+    phanta_prepare_counts --> phanta_total_reads
+    phanta_prepare_counts --> phanta_normalize_counts
+    phanta_prepare_counts --> phanta_merge_tables
+    phanta_total_reads --> phanta_normalize_counts
+    phanta_normalize_counts --> phanta_merge_tables
+
+    style PHANTA fill:#f1f5f922,stroke:#94a3b8,stroke-width:1px,stroke-dasharray:4 3,color:#94a3b8
+
+    classDef stage0 fill:#f1f5f9,stroke:#94a3b8,stroke-width:1.5px,color:#334155
+    class phanta_db_manifest,version_log,kraken2,phanta_filter,bracken,phanta_scale,phanta_failed_samples,phanta_prepare_counts,phanta_total_reads,phanta_normalize_counts,phanta_merge_tables stage0
+
+    linkStyle default stroke:#cbd5e1,stroke-width:1.5px

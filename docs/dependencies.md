@@ -15,7 +15,8 @@ the profile — `conf/profiles/<site>.config` — and nowhere else.
 | Harvard FASRC (Cannon) | `harvard_rc` | a `beforeScript` per process group, loading hutlab environment modules |
 | Tufts HPC | `tufts_hpc` | tools on `PATH`, or Apptainer where a process declares a `container` |
 | This machine | `local` | tools on `PATH` |
-| AWS Batch | `amazon` | per-process containers — **incomplete**, six processes only |
+| This machine | `local_docker` | `local`, but Phanta's tools come from its container. The only way to run Phanta without a cluster. |
+| AWS Batch | `amazon` | per-process containers — **incomplete**: the six original read-based processes, plus Phanta |
 
 Harvard is the only site where the whole pipeline is wired up. There, one Groovy
 variable per software stack is defined at the top of the profile and referenced
@@ -29,6 +30,7 @@ by the process groups, so a version is changed in one line:
 | `env_baqlava` | `rocky8/baqlava/1.2.0-devel` | `baqlava`; auto-loads HUMAnN 4, anadama2, MetaPhlAn |
 | `env_biobakery` | `rocky8/biobakeryworkflows/3.2` | everything below |
 | `env_halla` | `rocky8/halla/0.8.20` | `halla` — and nothing else, deliberately |
+| `env_phanta` | **none — a container**, see below | `kraken2`, `bracken`, and the pinned Python stack |
 
 `rocky8/biobakeryworkflows/3.2` carries three unrelated groups of dependencies,
 which is why so many processes load it:
@@ -125,3 +127,38 @@ module load jdk/21.0.2-fasrc01
 export PATH=/n/lab_storage/huttenhower_lab/tools/nextflow/24.10.4/bin:$PATH
 bin/check_profile_resources.py && bin/make_diagrams.py --check
 ```
+
+## Phanta is the exception: a container, not a module
+
+Every other stack above is a hutlab module on FASRC. Phanta's is a container,
+on every site, and that is deliberate rather than convenience.
+
+Phanta's four published tables are required to be byte-identical between the
+upstream tool and this port, and between AWS and FASRC. Every Phanta script
+writes through `pandas.to_csv`, whose float formatting is version-sensitive, so
+both sides of that comparison have to run the same pandas and numpy. Upstream
+pins neither — `phanta_env.yaml` pins only `kraken2` and `snakemake` — and a
+module stack whose Python libraries are not pinned to the same image cannot
+make that guarantee. The image is built from a 235-package lock file, pinned by
+URL and checksum: see [containers/phanta/README.md](../containers/phanta/README.md).
+
+One image digest is referenced three ways, each through its own profile's
+mechanism, because the rule that software comes from the profile still holds —
+what is shared is the digest, not a config file:
+
+| Profile | How |
+| --- | --- |
+| `amazon` | `container = 'public.ecr.aws/…@sha256:…'` on each Phanta process |
+| `harvard_rc` | `def env_phanta` pulls that digest with Apptainer |
+| `tufts_hpc` | Apptainer is already enabled; a `container` directive suffices |
+
+Always the digest, never a tag. A tag is mutable, so two sites resolving the
+same tag at different times can get different images — which is precisely the
+divergence byte-identity would otherwise hide.
+
+**Not usable yet on any site.** The image is built but has not been pushed, so
+no digest exists; `phanta_image` in `conf/profiles/harvard_rc.config` is `null`
+and Phanta processes there fail with a message saying so. FASRC additionally
+depends on whether the cluster permits Apptainer for this stack — if it requires
+a hutlab module instead, byte-identity with AWS is **not** guaranteed and FASRC
+needs a baseline of its own.

@@ -12,6 +12,7 @@ process version_log {
     def baqlava_db_str     = params.baqlava_db     ?: 'default (bundled)'
     def strainphlan_db_str = params.strainphlan_db  ?: 'auto-resolved from metaphlan_db'
     def phylophlan_str     = params.phylophlan_path ?: 'not set'
+    def phanta_db_str      = params.phanta_db       ?: 'not set'
     """
     {
         echo "================================================================"
@@ -49,6 +50,7 @@ process version_log {
         echo "baqlava_db:       ${baqlava_db_str}"
         echo "strainphlan_db:   ${strainphlan_db_str}"
         echo "phylophlan_path:  ${phylophlan_str}"
+        echo "phanta_db:        ${phanta_db_str}"
         echo ""
 
         echo "----------------------------------------------------------------"
@@ -87,6 +89,24 @@ process version_log {
         echo ""
         echo "run_viral_profiling:         ${params.run_viral_profiling}"
         echo "  baqlava_bypass_depletion:          ${params.baqlava_bypass_depletion}"
+        echo ""
+        echo "phanta (--workflow phanta):  ${params.workflow == 'phanta'}"
+        echo "  phanta_samplesheet:                ${params.phanta_samplesheet ?: '-'}"
+        echo "  phanta_db:                         ${phanta_db_str}"
+        echo "  phanta_confidence:                 ${params.phanta_confidence}"
+        echo "  phanta_read_length:                ${params.phanta_read_length}"
+        echo "  phanta_filter_thresh:              ${params.phanta_filter_thresh}"
+        echo "  phanta_cov_thresh_bacterial:       ${params.phanta_cov_thresh_bacterial}"
+        echo "  phanta_cov_thresh_viral:           ${params.phanta_cov_thresh_viral}"
+        echo "  phanta_cov_thresh_arc:             ${params.phanta_cov_thresh_arc}"
+        echo "  phanta_cov_thresh_euk:             ${params.phanta_cov_thresh_euk}"
+        echo "  phanta_minimizer_thresh_bacterial: ${params.phanta_minimizer_thresh_bacterial}"
+        echo "  phanta_minimizer_thresh_viral:     ${params.phanta_minimizer_thresh_viral}"
+        echo "  phanta_minimizer_thresh_arc:       ${params.phanta_minimizer_thresh_arc}"
+        echo "  phanta_minimizer_thresh_euk:       ${params.phanta_minimizer_thresh_euk}"
+        echo "  phanta_gzipped:                    ${params.phanta_gzipped}"
+        echo "  phanta_db_checksum_full:           ${params.phanta_db_checksum_full}"
+        echo "  save_intermediate:                 ${params.save_intermediate}"
         echo ""
         echo "run_strain_profiling:        ${params.run_strain_profiling}"
         echo "  strainphlan_clades:                ${params.strainphlan_clades ?: 'all detected'}"

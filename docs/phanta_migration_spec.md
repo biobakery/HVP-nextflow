@@ -38,9 +38,9 @@ that.
 | Phanta test reads | `http://ab_phanta.os.scg.stanford.edu/Phanta_DBs/test_dataset.tar.gz` — four `.fq.gz`, **not** in the repo |
 | Kraken2 | >= 2.1.2 (needs `--report-minimizer-data`); pin 2.1.6 |
 | Bracken, Python, pandas, numpy | Pin exact versions in the Phanta container; record what the baseline resolved to. **Resolved:** bracken 3.1, python 3.10.22, pandas 2.3.3, numpy 2.2.6 (also biopython 1.88, snakemake 7.15.2). Locked by URL + checksum in `containers/phanta/conda-lock.txt` |
-| Phanta image | One digest in `public.ecr.aws`; every profile references it (convention 4). **Built** as `containers/phanta/` (`linux/amd64`, 1.73 GB); **not yet pushed**, so no digest exists yet |
+| Phanta image | One digest in `public.ecr.aws`; every profile references it (convention 4). **Built** as `containers/phanta/` (`linux/amd64`, 1.73 GB); **not yet pushed**, so no digest exists yet. Locally the image is referenced by tag `phanta:0.0.5-dev` from `conf/profiles/local_docker.config` — see [Appendix F](#appendix-f-implementation-notes-from-the-port) |
 | Tiny test database | `tests/fixtures/phanta/tiny_db/db/`, built and committed. `inspect.out` sha256 `554c323f5357f20cfd5372350676d1f55e3fc5a209015c0310c2180e7e5e299e` — the value `phanta_db_expected_inspect_sha256` takes for tiny-database runs |
-| Nextflow | `24.10.4` — what `tests/run_tests.sh` pins; `manifest.nextflowVersion` is `>= 24.04.0` |
+| Nextflow | `24.10.4` — what `tests/run_tests.sh` pins; `manifest.nextflowVersion` is `>= 24.04.0`. **Note:** Nextflow 26.x rejects `conf/base.config` outright (its stricter config parser refuses the top-level `def check_max(obj, type)` at line 206). This is a repo-wide incompatibility, not a Phanta one. `NXF_SYNTAX_PARSER=v1` is the workaround if a 26.x launcher is all that is available |
 | Java | 21 |
 | `manifest.version` | currently `0.0.4`; bump to `0.0.5` with the Phanta release |
 | Upstream fixtures | `<phanta>/testing/{classification,final_merged_outputs}/` |
@@ -87,6 +87,13 @@ what CI enforces.
    mgx wrapper is built. Processes are lowercase snake_case, workflows
    UPPER_SNAKE; per-sample processes carry `tag "$sample"`; publish with
    `publishDir path: { "${params.outdir}/…" }, mode: 'copy'`.
+
+   **Amendment.** `tag "$sample"` is wrong wherever `sample` is a local defined
+   in the `script:` block rather than a process input — the `tag` directive is
+   evaluated against the input scope, so it renders `(null)` and every task in
+   the trace is unlabelled. Phanta's modules take `[meta, files]` tuples, so
+   they use `tag "${meta.id}"`. Six modules were written the wrong way first
+   and the only symptom was a log full of `(null)`.
 2. **`meta.paired_end`, never `meta.single_end`.** Subworkflows carry
    `[ [id: sample, paired_end: bool], files ]` and unwrap to a plain sample
    string at the module boundary — see
@@ -184,7 +191,8 @@ HVP-nextflow/
 │   ├── tufts_hpc.yaml                      # same, plus "not set yet" note
 │   ├── profiles/
 │   │   ├── aws.config                      # Phanta blocks: container digest + queue + resources
-│   │   └── harvard_rc.config               # def env_phanta; env-only withName blocks
+│   │   ├── harvard_rc.config               # def env_phanta; env-only withName blocks
+│   │   └── local_docker.config             # ADDED: laptop/CI-host Docker profile (Appendix F)
 │   └── databases/
 │       ├── aws.config                      # create: phanta_db + expected checksum as s3://
 │       └── harvard_rc.config               # phanta_db + expected checksum
@@ -379,6 +387,12 @@ than stopping at the first mismatch, lists every missing/unexpected/differing
 file, excludes `.krak` and `pipeline_info/`, exits nonzero on any difference.
 Investigate every mismatch; no numeric tolerances.
 
+**WRITTEN** (phase 1 step 6, pulled forward — it was needed to prove phase 2).
+It also documents the five *structural* differences between an upstream output
+tree and ours that are by design rather than defects, so a reader does not have
+to re-derive them each time; see
+[Appendix F](#appendix-f-implementation-notes-from-the-port).
+
 ## Work plan
 
 **21-30 engineer-days over 5-6 weeks.** Owners are roles until assigned.
@@ -481,8 +495,11 @@ produce", item 1).
    `.krak` differs, stop and re-derive the ordering contract.
 5. Commit the reviewed outputs to `tests/fixtures/phanta/baseline/` with
    checksums. Record which order each file carries.
-6. Write `bin/phanta_compare_outputs.sh` with unit tests. Small script, not a
-   framework.
+6. **DONE.** Write `bin/phanta_compare_outputs.sh` with unit tests. Small
+   script, not a framework. Written during phase 2, because proving the port
+   needed it; it has been exercised against a real paired-run comparison
+   (upstream Snakemake vs. the Nextflow workflow, tiny database) rather than
+   against unit tests alone.
 7. Produce and commit a tiny-database baseline so the routine regression can run
    without the full database.
 
@@ -496,12 +513,27 @@ baseline-refresh instructions in `docs/phanta_testing.md`.
 byte-identical apart from `.krak`; a clean checkout compares fixtures without
 rerunning Phanta.
 
-### Phase 2 — Port (8-10 days)
+### Phase 2 — Port (8-10 days) — **DONE**, except step 5 (deliberately skipped)
 
 *Owner: Nextflow engineer; domain scientist reviews Phanta-specific
 transformations.*
 
-1. Add `include { PHANTA }` and a `case 'phanta':` / `PHANTA(` router case to
+**Status.** The workflow is built and verified end to end, but *locally* rather
+than on AWS Batch: the gate below names AWS, and AWS is still blocked on the
+infrastructure handover. To get an end-to-end run at all, a Docker-backed
+`local_docker` profile was added (see
+[Appendix F](#appendix-f-implementation-notes-from-the-port)) — it is a real
+profile, not test scaffolding, and it is also what lets a new contributor run
+Phanta on a laptop before any cluster account exists.
+
+**Result:** against the tiny database, all four published tables are
+byte-identical to an upstream Snakemake run in the same pinned image, as is
+every per-sample intermediate and all three `filtering_decisions` files. Both
+output orderings reproduce. `-resume` caches all 23 tasks. All three CI checks
+are green. The scientific-script adaptation (step 7) landed earlier in commit
+`f61b102` with its own equivalence proof.
+
+1. **DONE.** Add `include { PHANTA }` and a `case 'phanta':` / `PHANTA(` router case to
    [main.nf](../main.nf), in exactly the shape "CI obligations" requires.
    Leave `phanta` out of the `--readsdir` guard list; add a
    `--phanta_samplesheet` existence-and-parse guard as a `def` at the bottom
@@ -510,7 +542,7 @@ transformations.*
    parsing emitting `[[id:,paired_end:],files]` plus an ordered sample-ID
    channel, the per-sample chain, and both cohort barriers. No subworkflow
    files, no second root pipeline.
-2. Parameters, per [Appendix B](#appendix-b-parameter-mapping):
+2. **DONE.** Parameters, per [Appendix B](#appendix-b-parameter-mapping):
    - [conf/params.config](../conf/params.config): a `// ── Phanta options ──`
      section; `phanta_db = null` under *Database paths*; `phanta_options = ''`
      under *Per-tool extra arguments*; `phanta` added to the token comment on
@@ -523,15 +555,25 @@ transformations.*
      `paired_end`/`single_end`/`filepattern` do not apply to Phanta.
    - `conf/databases/harvard_rc.config`: `phanta_db` and
      `phanta_db_expected_inspect_sha256` (the AWS file was created in phase 0).
-3. Validate before expensive work: duplicate sample IDs, mixed library layout,
-   missing read files, parameter ranges, and every file under "Required database
-   files". These checks run in a task, not in the workflow body, so `-preview`
-   is unaffected.
-4. Implement `phanta_db_manifest` and run it as part of validation, ahead of the
-   first Kraken2 task. Give it a `withName` block with generous time —
-   `phanta_db_checksum_full` reads 20+ GB. Extend `version_log` as described
-   under "Provenance".
-5. Spend at most one engineer-day on an nf-core module fit check:
+3. **DONE.** Validate before expensive work: duplicate sample IDs, mixed
+   library layout, missing read files, parameter ranges, and every file under
+   "Required database files". These checks run in a task, not in the workflow
+   body, so `-preview` is unaffected.
+
+   Five guards shipped. `def phanta_samplesheet_rows(samplesheet)` in
+   `workflows/phanta.nf` rejects a wrong header, duplicate sample IDs, a cohort
+   that mixes paired and single-end samples, and a missing `--phanta_db`; the
+   per-file database checks live in `phanta_db_manifest` and run in a task.
+4. **DONE.** Implement `phanta_db_manifest` and run it as part of validation,
+   ahead of the first Kraken2 task. Give it a `withName` block with generous
+   time — `phanta_db_checksum_full` reads 20+ GB. Extend `version_log` as
+   described under "Provenance".
+
+   Verified by running against a deliberately wrong expected checksum: exit 1,
+   zero `kraken2` task directories. Worth knowing that the first version of
+   this guard silently passed — see the Elvis-operator note in
+   [Appendix F](#appendix-f-implementation-notes-from-the-port).
+5. **NOT DONE — deliberately; see the note under this step.** Spend at most one engineer-day on an nf-core module fit check:
    - `KRAKEN2_KRAKEN2`: accepts `--report-minimizer-data` via `ext.args`,
      retains the eight-column report, suppresses per-read output by default,
      reports >= 2.1.2.
@@ -545,14 +587,25 @@ transformations.*
    Either way, both contracts are asserted by the `run_tests.sh` Phanta cases
    (the report has eight columns; both Bracken outputs exist under their
    upstream names).
-6. CI obligations: add the `WORKFLOWS` tuple and the `{samplesheet}` stub to
+
+   **Local modules were written instead, without spending the day.** The step
+   itself says to fall back if reconciling the container directive costs more
+   than the check saves, and the whole point of convention 4 is that software
+   comes from the profile — an nf-core module's own `container` directive is
+   precisely the thing that convention forbids. Both modules are small (one
+   tool invocation each) and both upstream contracts hold: the Kraken2 report
+   has eight columns, and Bracken's input is staged as
+   `{samp}.krak.report.filtered` so its implicit second output lands under the
+   upstream name. The fit check remains available as a later cleanup; it is not
+   a release blocker, and the decisions doc already says so.
+6. **DONE.** CI obligations: add the `WORKFLOWS` tuple and the `{samplesheet}` stub to
    `bin/make_diagrams.py`; add `withName` blocks to `conf/base.config` for
    every new process; add `def env_phanta` and env-only `withName` blocks to
    `conf/profiles/harvard_rc.config`; regenerate `docs/diagrams/` and
    `docs/workflow_reference.md`; add the `env_phanta` rows to
    `docs/dependencies.md`. Run all three CI checks locally before pushing.
-7. Copy the scientific scripts into flat `bin/phanta_*` files and adapt them
-   there — never edit upstream copies. Signatures and current behavior in
+7. **DONE** (commit `f61b102`). Copy the scientific scripts into flat
+   `bin/phanta_*` files and adapt them there — never edit upstream copies. Signatures and current behavior in
    [Appendix A.2](#a2-script-signatures). Every script takes explicit input and
    output paths. Specifically:
    - Filtering takes explicit species, filtered-report, and decision paths, and
@@ -565,15 +618,16 @@ transformations.*
      ordered input manifests.
    - Port `merging_scaled_bracken.py` only; drop the two R variants (neither is
      wired into the `Snakefile`).
-8. Use isolated task directories. Do not set global `stageInMode 'copy'`. No
-   process may scan a shared classification directory or derive an output beside
-   a staged input.
-9. Implement both cohort barriers explicitly.
-10. Route Bracken-ineligible samples: zero-byte products plus a status/reason
-    record, and a sorted `samples_that_failed_bracken.txt`. Tool and
-    infrastructure failures stay fatal.
-11. Implement the publishing contract above.
-12. Do not port `single_end_krak` or post-processing.
+8. **DONE.** Use isolated task directories. Do not set global
+   `stageInMode 'copy'`. No process may scan a shared classification directory
+   or derive an output beside a staged input.
+9. **DONE.** Implement both cohort barriers explicitly.
+10. **DONE.** Route Bracken-ineligible samples: zero-byte products plus a
+    status/reason record, and a sorted `samples_that_failed_bracken.txt`. Tool
+    and infrastructure failures stay fatal. Verified with `sample_c`: zero-byte
+    products, present in the failed list, absent from the merged tables.
+11. **DONE.** Implement the publishing contract above.
+12. **HELD.** Do not port `single_end_krak` or post-processing.
 
 **Deliverables:** routed `phanta` workflow; validated samplesheet input channel;
 Kraken2 and Bracken modules running in the pinned image; database manifest with
@@ -586,10 +640,36 @@ tables; every process declares inputs and outputs; no process scans a shared
 results directory; `make_diagrams.py --check` and `check_profile_resources.py`
 pass.
 
+**Gate status: met except for "on AWS".** The end-to-end run, the I/O
+declarations, the absence of shared-directory scanning, and both CI scripts all
+pass under `-profile local_docker`. Repeating the run on Batch is phase 0 step
+4 work, blocked on the handover. Two caveats on the evidence, recorded so they
+are not mistaken for a clean bill:
+
+- The `-resume` evidence comes from Nextflow 26.10.4 with `NXF_SYNTAX_PARSER=v1`,
+  not the pinned 24.10.4, because the 24.10.4 launcher available here runs in
+  `mode=dev` (jar via `java -cp`), which does not persist the cache at all —
+  resume *appears* broken under it for every pipeline, including a hello-world
+  control. Re-confirm resume on the pinned launcher when one is installed
+  properly.
+- `conf/profiles/harvard_rc.config` carries `phanta_image = null`, so Phanta
+  cannot actually run at FASRC yet. That is deliberate: there is no ECR digest
+  to point it at, and convention 4 forbids inventing a second image source.
+
 ### Phase 3 — Validate on AWS, then reproduce on FASRC (4-6 days)
 
 *Owner: pipeline engineer; acceptance by domain scientist; FASRC run by
 platform engineer.*
+
+**Not started, but partly pre-paid.** Six of the assertions this phase makes
+have already been demonstrated by hand under `-profile local_docker` — the
+tiny-DB byte-identity comparison (case 17), the ineligible-sample behavior
+(case 19), both output orderings (case 20), the fail-fast wrong-database guard
+(case 22), the barrier cardinality (case 23), and resume (case 24, with the
+launcher caveat in phase 2's gate status). What is missing is turning each into
+a `run_tests.sh` case that runs unattended, committing the baselines they
+compare against, and re-running the lot on a real site. Treat the hand-run
+results as evidence the cases will pass, not as the cases.
 
 1. Parameterise [tests/run_tests.sh](../tests/run_tests.sh) so one suite runs
    at both sites: `NF="${NF:-/n/lab_storage/.../nextflow}"`,
@@ -761,7 +841,16 @@ Resolve with the named owner; record the answer here.
    readably. *Pipeline engineer, phase 0.*
 4. **Which real cohort is the acceptance dataset?** *Domain scientist. Gates
    phase 3 step 6.*
-5. **Emit `pipeline_completed.txt` or exclude it?** *Pipeline engineer, phase 2.*
+5. ~~**Emit `pipeline_completed.txt` or exclude it?**~~ **ANSWERED —
+   excluded.** Upstream's `rule all` touches the file purely as a Snakemake
+   completion marker; Nextflow already reports completion through its own exit
+   status, `pipeline_info/` reports, and `pipeline_log.txt`, so the file would
+   carry no information and would be a second, weaker claim about whether a run
+   finished. `bin/phanta_compare_outputs.sh` therefore reports it as
+   "only in upstream" on every paired run — expected, and documented as one of
+   the five structural differences in
+   [Appendix F](#appendix-f-implementation-notes-from-the-port).
+   *Pipeline engineer, phase 2.*
 
 ---
 
@@ -1051,37 +1140,40 @@ mirrors how upstream ships the real database.
 
 | Path | Action | Done when |
 | --- | --- | --- |
-| `main.nf` | modify | `include { PHANTA }`; `case 'phanta':` / `PHANTA(` in the exact shape; excluded from the `--readsdir` guard; `--phanta_samplesheet` guard as a `def`; `phanta` in the `default:` string |
-| `nextflow.config` | modify | `amazon` profile also includes `conf/databases/aws.config` |
-| `conf/params.config` | modify | `// ── Phanta options ──` section with every Appendix B default; `phanta_db = null`; `phanta_options = ''`; `phanta` in the workflow-token comment |
-| `conf/harvard_rc.yaml`, `conf/tufts_hpc.yaml` | modify | commented `### Phanta workflow` section; `phanta` in `### Which workflow`; Tufts "not set yet" line |
-| `conf/base.config` | modify | `withName` blocks for `kraken2`, `bracken`, `phanta_db_manifest`, and the small table steps |
-| `conf/profiles/aws.config` | modify | Phanta blocks with `container` digest, `queue`, cpus/memory/time restated; `cliPath` no longer hardcoded |
-| `conf/profiles/harvard_rc.config` | modify | `def env_phanta` (Apptainer pull of the digest); env-only `withName` blocks on selectors base does not use |
-| `conf/databases/aws.config` | create | `phanta_db` + `phanta_db_expected_inspect_sha256` as `s3://` paths |
-| `conf/databases/harvard_rc.config` | modify | `phanta_db` + `phanta_db_expected_inspect_sha256` |
-| `workflows/phanta.nf` | create | `workflow PHANTA {` at col 0 with a `//` line above; samplesheet parsing emitting `[[id:,paired_end:],files]` + ordered sample-ID channel; per-sample chain; both barriers explicit; publishes |
-| `modules/kraken2/main.nf` | create | A.1 command; minimizer report; `.krak` unpublished |
-| `modules/bracken/main.nf` | create | A.1 command; input staged as `.krak.report.filtered`; both outputs emitted |
-| `modules/taxonomy/phanta_filter/main.nf` | create | filtered report, species table, decisions, eligibility status |
-| `modules/taxonomy/phanta_scale/main.nf` | create | scaled table; empty passthrough when ineligible |
-| `modules/utils/phanta_db_manifest/main.nf` | create | writes the manifest; fails on checksum mismatch; runs before Kraken2 |
-| `modules/utils/phanta_failed_samples/main.nf` | create | sorted failed list |
-| `modules/utils/phanta_prepare_counts/main.nf` | create | `.to_merge` plus the per-sample total-reads row |
-| `modules/utils/phanta_normalize_counts/main.nf` | create | one sample per task |
-| `modules/utils/phanta_merge_tables/main.nf` | create | three tables, columns in samplesheet order |
-| `modules/utils/version_log/main.nf` | modify | `phanta_db:` under "Database Paths"; Phanta params block |
-| `bin/make_diagrams.py` | modify | `phanta` tuple in `WORKFLOWS`; `{samplesheet}` stub in `make_stubs()` plumbed through `render_dag` |
-| `bin/phanta_convert_samplesheet.py` | create | legacy TSV → CSV |
-| `bin/phanta_*.py`, `bin/phanta_calc_total_reads.sh` | create | explicit I/O paths; no derived output names |
-| `bin/phanta_compare_outputs.sh` | create | `diff -r` wrapper; excludes `.krak` and `pipeline_info/`; nonzero on any diff |
-| `tests/run_tests.sh` | modify | `NF`/`PROFILE` env overrides; `PHANTA_ONLY` guard; `check_identical` helper; E.2 cases |
+| `main.nf` | modify — **DONE** | `include { PHANTA }`; `case 'phanta':` / `PHANTA(` in the exact shape; excluded from the `--readsdir` guard; `--phanta_samplesheet` guard as a `def`; `phanta` in the `default:` string |
+| `nextflow.config` | modify — **PARTIAL** | ~~`amazon` profile also includes `conf/databases/aws.config`~~ still TODO (blocked with the rest of the AWS work); `local_docker` added to the `profiles` block |
+| `conf/params.config` | modify — **DONE** | `// ── Phanta options ──` section with every Appendix B default; `phanta_db = null`; `phanta_options = ''`; `phanta` in the workflow-token comment |
+| `conf/harvard_rc.yaml`, `conf/tufts_hpc.yaml` | modify — **DONE** | commented `### Phanta workflow` section; `phanta` in `### Which workflow`; Tufts "not set yet" line |
+| `conf/base.config` | modify — **DONE** | `withName` blocks for `kraken2`, `bracken`, `phanta_db_manifest`, and the small table steps |
+| `conf/profiles/aws.config` | modify — **TODO** (blocked: no ECR digest) | Phanta blocks with `container` digest, `queue`, cpus/memory/time restated; `cliPath` no longer hardcoded |
+| `conf/profiles/harvard_rc.config` | modify — **DONE** | `def env_phanta` (Apptainer pull of the digest); env-only `withName` blocks on selectors base does not use |
+| `conf/databases/aws.config` | create — **TODO** (blocked: no S3 bucket) | `phanta_db` + `phanta_db_expected_inspect_sha256` as `s3://` paths |
+| `conf/databases/harvard_rc.config` | modify — **DONE** | `phanta_db` + `phanta_db_expected_inspect_sha256` |
+| `workflows/phanta.nf` | create — **DONE** | `workflow PHANTA {` at col 0 with a `//` line above; samplesheet parsing emitting `[[id:,paired_end:],files]` + ordered sample-ID channel; per-sample chain; both barriers explicit; publishes |
+| `modules/kraken2/main.nf` | create — **DONE** | A.1 command; minimizer report; `.krak` unpublished |
+| `modules/bracken/main.nf` | create — **DONE** | A.1 command; input staged as `.krak.report.filtered`; both outputs emitted |
+| `modules/taxonomy/phanta_filter/main.nf` | create — **DONE** | filtered report, species table, decisions, eligibility status |
+| `modules/taxonomy/phanta_scale/main.nf` | create — **DONE** | scaled table; empty passthrough when ineligible |
+| `modules/utils/phanta_db_manifest/main.nf` | create — **DONE** | writes the manifest; fails on checksum mismatch; runs before Kraken2 |
+| `modules/utils/phanta_failed_samples/main.nf` | create — **DONE** | sorted failed list |
+| `modules/utils/phanta_prepare_counts/main.nf` | create — **DONE** | `.to_merge` plus the per-sample total-reads row |
+| `modules/utils/phanta_normalize_counts/main.nf` | create — **DONE** | one sample per task |
+| `modules/utils/phanta_merge_tables/main.nf` | create — **DONE** | three tables, columns in samplesheet order |
+| `modules/utils/version_log/main.nf` | modify — **DONE** | `phanta_db:` under "Database Paths"; Phanta params block |
+| `bin/make_diagrams.py` | modify — **DONE** | `phanta` tuple in `WORKFLOWS`; `{samplesheet}` stub in `make_stubs()` plumbed through `render_dag` |
+| `bin/phanta_convert_samplesheet.py` | create — **DONE** | legacy TSV → CSV |
+| `bin/phanta_*.py`, `bin/phanta_calc_total_reads.sh` | create — **DONE** | explicit I/O paths; no derived output names |
+| `bin/phanta_compare_outputs.sh` | create — **DONE** | `diff -r` wrapper; excludes `.krak` and `pipeline_info/`; nonzero on any diff |
+| `tests/run_tests.sh` | modify — **TODO** (phase 3) | `NF`/`PROFILE` env overrides; `PHANTA_ONLY` guard; `check_identical` helper; E.2 cases |
 | `tests/fixtures/phanta/**` | create | tiny DB (or fetch script + checksum), inputs, samplesheets, baselines — **tiny DB and inputs done** (committed, with build script and pinned accessions); samplesheets and baselines still to come |
-| `docs/diagrams/architecture.mmd`, `docs/diagrams/phanta.mmd`, `docs/workflow_reference.md` | generate | `bin/make_diagrams.py` output committed; `--check` passes |
-| `docs/dependencies.md` | modify | `env_phanta` row in the stack table; `amazon` row updated |
-| `docs/architecture.md` | modify | Phanta entry; stale `version_log` claim fixed |
-| `docs/phanta_testing.md` | create | baseline refresh, full-DB procedure, resolved versions, checksums |
-| `README.md` | modify | Phanta in Workflow & I/O, Project Structure, Project Status |
+| `docs/diagrams/architecture.mmd`, `docs/diagrams/phanta.mmd`, `docs/workflow_reference.md` | generate — **DONE** | `bin/make_diagrams.py` output committed; `--check` passes |
+| `docs/dependencies.md` | modify — **DONE** | `env_phanta` row in the stack table; `amazon` row updated |
+| `docs/architecture.md` | modify — **DONE** | Phanta entry; stale `version_log` claim fixed |
+| `docs/phanta_testing.md` | create — **TODO** (phase 1) | baseline refresh, full-DB procedure, resolved versions, checksums |
+| `README.md` | modify — **DONE** | Phanta in Workflow & I/O, Project Structure, Project Status |
+| `conf/profiles/local_docker.config` | create — **DONE**, not in the original plan | Docker-backed local profile; pins every Phanta process to one image tag. See [Appendix F](#appendix-f-implementation-notes-from-the-port) |
+| `bin/check_profile_resources.py` | modify — **DONE**, not in the original plan | `local_docker` added to `PROFILES`, or the new profile goes unchecked |
+| `.github/workflows/ci-tests.yml` | modify — **DONE**, not in the original plan | one line: `local_docker` added to the profile parse loop |
 
 ## E.2 Test cases
 
@@ -1101,3 +1193,96 @@ from the existing 16.
 | `test24_phanta_resume` | second identical `nf_run` with `-resume`: all scientific tasks reported as cached in the log |
 | `test25_phanta_guards` — fast, no cluster | duplicate sample IDs, mixed layout, missing database file, and read length with no `kmer_distrib` each fail before any Kraken2 task with a clear message (same shape as the existing tests 15-16) |
 | Tool contracts (asserted inside `test17`) | Kraken2 report has eight columns; both Bracken outputs exist under their upstream names; no file written outside any task dir |
+
+---
+
+# Appendix F: implementation notes from the port
+
+Written during phase 2. Everything here is something that cost time to find and
+is not recoverable from reading the code afterwards.
+
+## F.1 The `local_docker` profile
+
+`conf/profiles/local_docker.config` runs the whole workflow on one machine with
+Docker. It exists because the phase 2 gate names AWS, AWS is blocked, and a
+port that has never been run end to end is not a port. It earns its place
+beyond that: a new contributor can run Phanta against the committed tiny
+database on a laptop with no cluster account and no S3 bucket.
+
+```bash
+docker build --platform linux/amd64 -t phanta:0.0.5-dev containers/phanta/
+nextflow run . -profile local_docker --workflow phanta \
+  --phanta_samplesheet <sheet>.csv \
+  --phanta_db tests/fixtures/phanta/tiny_db/db \
+  --phanta_read_length 100 --outdir <out>
+```
+
+Three things about it are deliberate:
+
+- **One image tag, named once** at the top of the file (`def phanta_image =
+  'phanta:0.0.5-dev'`) and applied through a single `withName` selector listing
+  every Phanta process. This mirrors convention 4's "referenced three ways" —
+  it is a fourth mechanism for a fourth profile, not a shared include.
+- **`--platform linux/amd64`** in `runOptions`, because the image is amd64 and
+  development here is arm64. Without it the container will not start at all.
+- **`-u $(id -u):$(id -g)`**, so published files are owned by the user rather
+  than by root.
+
+`--phanta_read_length 100` is not optional with the tiny database: it ships
+`database100mers.kmer_distrib` only, and the manifest process fails fast with a
+message naming the parameter if it is left at the default 150.
+
+## F.2 Structural differences a paired run will always report
+
+`bin/phanta_compare_outputs.sh` reports these five every time. All are by
+design; none indicate a defect, and they are listed in the script itself so
+nobody re-derives them.
+
+| File | Side | Why |
+| --- | --- | --- |
+| `{samp}.krak.report.filtered.bracken.temp` | upstream only | The zero-byte canary. Replaced by an explicit status record; the zero-byte *products* are still emitted |
+| `{samp}.krak.report_bracken_species.filtered.temp` | upstream only | Same |
+| `{samp}.krak.report.filtered.bracken.scaled.temp` | upstream only | Same |
+| `pipeline_completed.txt` | upstream only | Open question 5, answered: excluded |
+| `{samp}.krak.report.filtering_decisions.txt` for an *ineligible* sample | ours only | Upstream stops the chain before writing it. We publish the decisions for every sample, including ones Bracken skips, because they are the record of why filtering kept what it kept |
+
+Everything else — all four tables, every per-sample intermediate, both
+orderings — is byte-identical.
+
+## F.3 Nextflow traps hit during the port
+
+Four bugs here were silent: the code ran, exited 0, and produced
+normal-looking output.
+
+1. **`tag` is evaluated in the input scope.** `tag "$sample"` where `sample` is
+   assigned inside `script:` renders `(null)`. Use `tag "${meta.id}"`. See the
+   amendment under convention 1.
+2. **Groovy's `?:` treats `0` as false, and Nextflow coerces numeric-looking
+   CLI values to numbers.** An all-digit test checksum passed as
+   `--phanta_db_expected_inspect_sha256` arrived as the number `0`, so
+   `params.x ?: ''` yielded `''` and the fail-fast comparison was skipped
+   entirely — the run proceeded against an unverified database, exit 0. Test
+   for `null` explicitly and `.toString()` it. The fix is commented in
+   `modules/utils/phanta_db_manifest/main.nf` because it will look like
+   needless verbosity to the next reader.
+3. **A process whose inputs are all value channels emits a value channel.**
+   Both cohort barriers already behave correctly without `.first()`; adding it
+   is a no-op that Nextflow warns about (`The operator 'first' is useless when
+   applied to a value channel`). If a barrier appears to fan out one sample
+   instead of N, `.first()` is not the fix — look at the `collect()`.
+4. **A Nextflow installed as a jar run via `java -cp` is in `mode=dev`, which
+   does not persist the resume cache.** Resume then reports zero cached tasks
+   for *any* pipeline. Confirm against a hello-world control before concluding
+   a workflow's resume is broken. With a properly installed launcher the Phanta
+   run gives `cached=23, submitted=0`.
+5. **Nextflow 26.x will not parse `conf/base.config`.** Its stricter config
+   parser rejects the top-level `def check_max(obj, type)`. Repo-wide, not
+   Phanta-specific; `NXF_SYNTAX_PARSER=v1` works around it. Worth fixing
+   properly before anyone upgrades.
+
+## F.4 Provenance detail worth keeping
+
+The manifest records `phanta_db` as `${params.phanta_db}` — the path the user
+gave. It must not record the *staged* name: inside the task the database is
+staged as `db`, so the obvious interpolation writes `phanta_db	db`, which is
+true and useless. `phanta_db_realpath` carries the resolved location.

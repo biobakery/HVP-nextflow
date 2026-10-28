@@ -21,7 +21,7 @@ import subprocess
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROFILES = ["local", "harvard_rc", "tufts_hpc", "amazon"]
+PROFILES = ["local", "local_docker", "harvard_rc", "tufts_hpc", "amazon"]
 DIRECTIVES = ("cpus", "memory", "time")
 
 
