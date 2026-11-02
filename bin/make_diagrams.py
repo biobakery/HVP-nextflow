@@ -60,6 +60,43 @@ def declared_plugins():
     return {spec.split("@")[0]: spec for spec in re.findall(r"id\s+'([^']+)'", body)}
 
 
+def implementation(name):
+    """How a component is implemented, read from its code.
+
+    Follows the component's includes (through any shared subworkflows) and
+    collects the modules they reach, split by source, plus any Nextflow plugin
+    included as 'plugin/nf-<name>'. Returns {"local": [...], "nf-core": [...],
+    "plugins": [...]}; all empty for a placeholder.
+    """
+    found = {"local": set(), "nf-core": set(), "plugins": set()}
+    seen = set()
+
+    def walk(path):
+        path = os.path.normpath(path)
+        if path in seen or not os.path.exists(path):
+            return
+        seen.add(path)
+        for target in re.findall(r"include\s*\{[^}]*\}\s*from\s*'([^']+)'", open(path).read()):
+            if target.startswith("plugin/"):
+                found["plugins"].add(target.split("/", 1)[1])
+                continue
+            dest = os.path.normpath(os.path.join(os.path.dirname(path), target))
+            if os.path.isdir(dest):
+                dest = os.path.join(dest, "main.nf")
+            elif not dest.endswith(".nf"):
+                dest += ".nf"
+            rel = os.path.relpath(dest, REPO).split(os.sep)
+            if rel[:2] == ["modules", "local"]:
+                found["local"].add(rel[2])
+            elif rel[:2] == ["modules", "nf-core"]:
+                found["nf-core"].add("/".join(rel[2:-1]))
+            elif rel[0] == "subworkflows" and "utils_" not in rel[-2]:
+                walk(dest)
+
+    walk(os.path.join(COMPONENTS_DIR, name, "main.nf"))
+    return {k: sorted(v) for k, v in found.items()}
+
+
 def consistency_errors(reg):
     """Everything that would make the diagram lie about the code."""
     errors = []
@@ -84,6 +121,13 @@ def consistency_errors(reg):
                 errors.append(f"{name}: needs Nextflow plugin {spec}, which nextflow.config does not declare")
             elif "@" in spec and plugins[pid] != spec:
                 errors.append(f"{name}: needs {spec}, but nextflow.config declares {plugins[pid]}")
+        impl = implementation(name)
+        listed = {p.split("@")[0] for p in c.get("plugins", [])}
+        for pid in impl["plugins"]:
+            if pid not in listed:
+                errors.append(f"{name}: includes from plugin/{pid}, but its registry entry does not list {pid}")
+        if c["status"] == "ready" and not (impl["local"] or impl["nf-core"] or impl["plugins"] or listed):
+            errors.append(f"{name}: status is ready, but it reaches no module and no plugin")
         if c["stage"] not in stage_ids:
             errors.append(f"{name}: unknown stage '{c['stage']}'")
         if c["status"] not in ("ready", "skeleton"):
@@ -133,9 +177,7 @@ def mermaid(reg):
         out.append(f'    subgraph st_{s["id"]}["<b>{i} · {s["title"]}</b> &nbsp;<i>{how}</i>"]')
         out.append("        direction LR")
         for c in by_stage[s["id"]]:
-            tools = ", ".join(c["tools"])
-            via = "".join(f"<br/>⧉ {p}" for p in c.get("plugins", []))
-            out.append(f'        {c["name"]}["<b>{c["name"]}</b><br/><i>{tools}</i>{via}"]')
+            out.append("        " + node(c))
         if s["mode"] == "chain":
             names = [c["name"] for c in by_stage[s["id"]]]
             for a, b in zip(names, names[1:]):
@@ -155,8 +197,9 @@ def mermaid(reg):
     out += [
         '    subgraph legend[" "]',
         "        direction LR",
-        '        l_ready["ready"]',
-        '        l_skel["placeholder"]',
+        '        l_module["<b>module component</b><br/>▣ runs local or nf-core modules"]',
+        '        l_plugin{{"<b>plugin component</b><br/>⧉ built on a Nextflow plugin"}}',
+        '        l_skel["<b>placeholder</b><br/>wired in, not implemented"]',
         "    end",
         "",
         "    classDef ready fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#0f172a",
@@ -164,7 +207,7 @@ def mermaid(reg):
         "    classDef entry fill:#e2e8f0,stroke:#475569,stroke-width:1.5px,color:#0f172a",
         "    classDef output fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d",
     ]
-    ready = [c["name"] for c in reg["components"] if c["status"] == "ready"] + ["l_ready"]
+    ready = [c["name"] for c in reg["components"] if c["status"] == "ready"] + ["l_module", "l_plugin"]
     skel = [c["name"] for c in reg["components"] if c["status"] == "skeleton"] + ["l_skel"]
     outs = [f"out_{s['produces']}" for s in stages if s["produces"] not in consumed]
     out.append(f"    class {','.join(ready)} ready")
@@ -178,15 +221,49 @@ def mermaid(reg):
     return "\n".join(out) + "\n"
 
 
+def plugins_of(c):
+    """Plugins a component needs: listed in the registry, or included in its code."""
+    listed = {p.split("@")[0]: p for p in c.get("plugins", [])}
+    for pid in implementation(c["name"])["plugins"]:
+        listed.setdefault(pid, pid)
+    return sorted(listed.values())
+
+
+def node(c):
+    """One component box. A plugin component is a hexagon, a module component a
+    rectangle; the last line says where its code comes from."""
+    impl = implementation(c["name"])
+    lines = [f"<b>{c['name']}</b>", f"<i>{', '.join(c['tools'])}</i>"]
+    sources = [s for s in ("local", "nf-core") if impl[s]]
+    if sources:
+        lines.append(f"▣ {' + '.join(sources)} modules")
+    plugins = plugins_of(c)
+    for p in plugins:
+        lines.append(f"⧉ {p}")
+    label = "<br/>".join(lines)
+    return f'{c["name"]}{{{{"{label}"}}}}' if plugins else f'{c["name"]}["{label}"]'
+
+
+def implemented_as(c):
+    impl = implementation(c["name"])
+    parts = []
+    for source in ("local", "nf-core"):
+        mods = impl[source]
+        if mods:
+            shown = ", ".join(f"`{m}`" for m in mods[:4]) + (f" +{len(mods) - 4}" if len(mods) > 4 else "")
+            parts.append(f"▣ {source} modules: {shown}")
+    parts += [f"⧉ plugin `{p}`" for p in plugins_of(c)]
+    return "<br>".join(parts) or "—"
+
+
 def component_table(reg):
     titles = {s["id"]: f"{i} · {s['title']}" for i, s in enumerate(reg["stages"], 1)}
-    rows = ["| Stage | Component | Status | Tools | Nextflow plugins | What it does |",
+    rows = ["| Stage | Component | Status | Tools | Implemented as | What it does |",
             "|---|---|---|---|---|---|"]
     for c in reg["components"]:
         status = "ready" if c["status"] == "ready" else "placeholder"
-        plugins = ", ".join(f"`{p}`" for p in c.get("plugins", [])) or "—"
         rows.append(f"| {titles[c['stage']]} | `{c['name']}` | {status} | "
-                    f"{', '.join(c['tools'])} | {plugins} | {c['summary']} |")
+                    f"{', '.join(c['tools'])} | {implemented_as(c)} | {c['summary']} |")
     return "\n".join(rows) + "\n"
 
 

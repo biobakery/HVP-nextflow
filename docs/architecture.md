@@ -12,19 +12,19 @@ flowchart TB
     entry(["<b>main.nf</b> → orchestrator<br/><i>--components</i> · <i>--only</i>"])
     subgraph st_preprocess["<b>1 · Read QC & host removal</b> &nbsp;<i>in order</i>"]
         direction LR
-        kneaddata["<b>kneaddata</b><br/><i>KneadData</i>"]
+        kneaddata["<b>kneaddata</b><br/><i>KneadData</i><br/>▣ local modules"]
         host_scrubber["<b>host_scrubber</b><br/><i>sra-human-scrubber</i>"]
         kneaddata --> host_scrubber
     end
     subgraph st_read_profiling["<b>2 · Read-based profiling</b> &nbsp;<i>side by side</i>"]
         direction LR
-        baqlava["<b>baqlava</b><br/><i>MetaPhlAn, HUMAnN, BAQLaVa</i>"]
+        baqlava["<b>baqlava</b><br/><i>MetaPhlAn, HUMAnN, BAQLaVa</i><br/>▣ local modules"]
         phanta["<b>phanta</b><br/><i>Phanta</i>"]
         sylph["<b>sylph</b><br/><i>Sylph</i>"]
     end
     subgraph st_assembly["<b>3 · De novo assembly</b> &nbsp;<i>side by side</i>"]
         direction LR
-        assembly["<b>assembly</b><br/><i>MEGAHIT, MetaBAT2, CheckM2, PhyloPhlAn, Mash</i>"]
+        assembly["<b>assembly</b><br/><i>MEGAHIT, MetaBAT2, CheckM2, PhyloPhlAn, Mash</i><br/>▣ local modules"]
         metaspades["<b>metaspades</b><br/><i>metaSPAdes</i>"]
     end
     subgraph st_virus_identification["<b>4 · Virus identification</b> &nbsp;<i>side by side</i>"]
@@ -55,15 +55,16 @@ flowchart TB
     st_characterisation --> out_annotations[("completeness + taxonomy (tsv)")]
     subgraph legend[" "]
         direction LR
-        l_ready["ready"]
-        l_skel["placeholder"]
+        l_module["<b>module component</b><br/>▣ runs local or nf-core modules"]
+        l_plugin{{"<b>plugin component</b><br/>⧉ built on a Nextflow plugin"}}
+        l_skel["<b>placeholder</b><br/>wired in, not implemented"]
     end
 
     classDef ready fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#0f172a
     classDef skeleton fill:#ffffff,stroke:#94a3b8,stroke-width:1px,stroke-dasharray:4 3,color:#64748b
     classDef entry fill:#e2e8f0,stroke:#475569,stroke-width:1.5px,color:#0f172a
     classDef output fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
-    class kneaddata,baqlava,assembly,l_ready ready
+    class kneaddata,baqlava,assembly,l_module,l_plugin ready
     class host_scrubber,phanta,sylph,metaspades,genomad,cenote_taker3,checkv_contamination,circular_contigs,virus_rename,checkv_completeness,virus_taxonomy,l_skel skeleton
     class entry entry
     class out_read_profiles,out_annotations output
@@ -78,8 +79,11 @@ flowchart TB
 ```
 <!-- /generated:architecture -->
 
-Blue boxes run real tools today; dashed boxes are placeholders, wired in but
-empty (see below). An arrow is a hand-off of data between stages, labelled with
+Blue means a component runs real tools today. A rectangle (`▣`) is a **module
+component**: its processes come from `modules/local/` or `modules/nf-core/`. A
+hexagon (`⧉`) is a **plugin component**: it's built on a Nextflow plugin. Dashed
+boxes are placeholders, wired in but empty (see below). Shape and tags are read
+from each component's includes, not written by hand. An arrow is a hand-off of data between stages, labelled with
 what is handed over.
 
 ## Layers
@@ -154,14 +158,14 @@ there is no QC), for assemblers that want them.
 
 <!-- generated:components -->
 <!-- written by bin/make_diagrams.py from conf/components.json; do not edit by hand -->
-| Stage | Component | Status | Tools | Nextflow plugins | What it does |
+| Stage | Component | Status | Tools | Implemented as | What it does |
 |---|---|---|---|---|---|
-| 1 · Read QC & host removal | `kneaddata` | ready | KneadData | — | Trim reads and remove host reads |
+| 1 · Read QC & host removal | `kneaddata` | ready | KneadData | ▣ local modules: `kneaddata` | Trim reads and remove host reads |
 | 1 · Read QC & host removal | `host_scrubber` | placeholder | sra-human-scrubber | — | Scrub residual human reads |
-| 2 · Read-based profiling | `baqlava` | ready | MetaPhlAn, HUMAnN, BAQLaVa | — | Bacterial depletion, then viral profiling |
+| 2 · Read-based profiling | `baqlava` | ready | MetaPhlAn, HUMAnN, BAQLaVa | ▣ local modules: `baqlava`, `humann`, `humann_merge`, `humann_regroup` +3 | Bacterial depletion, then viral profiling |
 | 2 · Read-based profiling | `phanta` | placeholder | Phanta | — | Virus-inclusive k-mer profiling |
 | 2 · Read-based profiling | `sylph` | placeholder | Sylph | — | Containment-based profiling |
-| 3 · De novo assembly | `assembly` | ready | MEGAHIT, MetaBAT2, CheckM2, PhyloPhlAn, Mash | — | Contigs, plus MAG binning and SGB clustering |
+| 3 · De novo assembly | `assembly` | ready | MEGAHIT, MetaBAT2, CheckM2, PhyloPhlAn, Mash | ▣ local modules: `abundance`, `align_and_depth`, `checkm2`, `mash` +3 | Contigs, plus MAG binning and SGB clustering |
 | 3 · De novo assembly | `metaspades` | placeholder | metaSPAdes | — | Alternative short-read assembler |
 | 4 · Virus identification | `genomad` | placeholder | geNomad | — | Viral contigs and proviruses |
 | 4 · Virus identification | `cenote_taker3` | placeholder | Cenote-Taker 3 | — | Hallmark-gene virus discovery |
@@ -198,8 +202,9 @@ To implement `genomad`, for example:
    `// Component: … status:` header line to match.
 4. Add resources for the new processes in `conf/base.config` and the module
    environment in each site profile.
-5. Run `bin/make_diagrams.py` and commit the result. The box turns blue, and a
-   plugin-backed component shows `⧉ nf-<name>` under its tools.
+5. Run `bin/make_diagrams.py --render` and commit the result. The box turns
+   blue: a rectangle tagged `▣ local` / `nf-core modules`, or, if it uses a
+   Nextflow plugin, a hexagon tagged `⧉ nf-<name>`.
 
 A brand-new component works the same way. Add an entry to
 `conf/components.json`, create `subworkflows/local/components/<name>/main.nf`
