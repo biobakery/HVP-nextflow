@@ -1,8 +1,8 @@
-# biobakery-nextflow — combined tool image (no databases)
+# HVP-nextflow — combined image for the kneaddata and baqlava components' MetaPhlAn/HUMAnN (no databases)
 # Compatible stack: KneadData 0.12 + MetaPhlAn 4.0.6 (vOct22_CHOCOPhlAnSGB_202403) + HUMAnN 3.9
 # Databases must be mounted at runtime (e.g. -v /path/to/dbs:/databases)
 #
-# Build:  docker build -t biobakery-nextflow .
+# Build:  docker build -t hvp-nextflow .
 # Run:    nextflow run main.nf -profile standard \
 #           --host_genome /databases/kneaddata/hg38 \
 #           --metaphlan_db /databases/metaphlan/mpa_vOct22_CHOCOPhlAnSGB_202403 \

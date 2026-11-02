@@ -1,70 +1,52 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-// ── Workflow imports ───────────────────────────────────────────────────────
-include { MGX }          from './workflows/mgx.nf'
-include { MTX }          from './workflows/mtx.nf'
-include { MGX_MTX }      from './workflows/mgx_mtx.nf'
-include { SIXTEENS }     from './workflows/sixteens.nf'
-include { VIS }          from './workflows/vis.nf'
-include { STATS }        from './workflows/stats.nf'
-include { ASSEMBLY } from './workflows/assembly.nf'
+// ═════════════════════════════════════════════════════════════════════════════
+// biobakery/hvp — Human Virome Project workflows
+//
+// Laid out the way nf-core pipelines are: initialise → named pipeline workflow
+// → complete. The pipeline itself is the HVP orchestrator (workflows/hvp.nf),
+// which runs components chosen at launch:
+//
+//   --components kneaddata,baqlava,assembly   the full orchestration (default)
+//   --plugin genomad                          one component on its own, plus the
+//                                             preprocessing and whatever it needs
+//
+// Component names, stages and status are listed in conf/components.json, and
+// drawn in docs/diagrams/architecture.mmd.
+// ═════════════════════════════════════════════════════════════════════════════
 
-// ── Router ─────────────────────────────────────────────────────────────────
-workflow {
+include { HVP                     } from './workflows/hvp.nf'
+include { PIPELINE_INITIALISATION } from './subworkflows/local/utils_hvp_pipeline/main.nf'
+include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_hvp_pipeline/main.nf'
+include { resolveComponents       } from './subworkflows/local/utils_hvp_pipeline/main.nf'
 
-    // Validate required params for read-based workflows. mgx_mtx is the
-    // exception: it takes two input folders instead of one, and validates them
-    // itself, mirroring wmgx_wmtx.py replacing --input with --input-metagenome
-    // and --input-metatranscriptome.
-    if (!params.readsdir && params.workflow in ['mgx', 'mtx', '16s', 'assembly']) {
-        error "ERROR: --readsdir is required. Example: --readsdir /path/to/fastqs"
-    }
+// The named pipeline workflow, so the run can be imported into a larger
+// pipeline the same way nf-core pipelines are.
+workflow BIOBAKERY_HVP {
 
-    switch (params.workflow) {
+    take:
+    reads       // Channel: [ [id: sample, paired_end: bool], reads ]
+    components  // List<String>: the components to run
 
-        case 'mgx':
-            MGX()
-            break
+    main:
+    HVP(reads, components)
 
-        case 'mtx':
-            MTX()
-            break
-
-        case 'mgx_mtx':
-            MGX_MTX()
-            break
-
-        case '16s':
-            SIXTEENS()
-            break
-
-        case 'vis':
-            VIS(Channel.value(report_input_dir(params.vis_input, 'vis')))
-            break
-
-        case 'stats':
-            STATS(Channel.value(report_input_dir(params.stats_input, 'stats')))
-            break
-
-        case 'assembly':
-            ASSEMBLY()
-            break
-
-        default:
-            error "Unknown workflow '${params.workflow}'. Choose: mgx | mtx | mgx_mtx | 16s | vis | stats | assembly"
-    }
+    emit:
+    read_profiles = HVP.out.read_profiles
+    contigs       = HVP.out.contigs
+    viral_genomes = HVP.out.viral_genomes
+    annotations   = HVP.out.annotations
 }
 
-// The folder a standalone vis or stats run reports on. Chained runs get the
-// folder stage_report_input builds instead, so this is only for --workflow
-// vis|stats.
-def report_input_dir(setting, label) {
-    def dir = file(setting ?: params.outdir)
+workflow {
 
-    if (!dir.exists())
-        error "ERROR: ${label} input folder not found: ${dir}\n" +
-              "Set --${label}_input to a bioBakery output folder."
+    PIPELINE_INITIALISATION(params.validate_params, params.readsdir)
 
-    return dir
+    // --plugin runs a single component; otherwise --components decides.
+    def components = resolveComponents(params.components, params.plugin)
+
+    BIOBAKERY_HVP(PIPELINE_INITIALISATION.out.reads, components)
+
+    PIPELINE_COMPLETION()
 }

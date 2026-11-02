@@ -1,0 +1,52 @@
+{
+  "_comment": [
+    "The HVP component registry: the single source of truth for which components exist.",
+    "The orchestrator (workflows/hvp.nf) reads it at launch to validate --components / --plugin",
+    "and to resolve dependencies; bin/make_diagrams.py reads it to draw docs/diagrams/architecture.mmd.",
+    "Adding a component = an entry here + subworkflows/local/components/<name>/main.nf + one call in its stage.",
+    "status: ready = runs real tools; skeleton = wired but emits nothing yet (logs a warning).",
+    "stage mode: chain = components run one after another, and an empty stage passes its input through;",
+    "            parallel = every selected component reads the same input and their outputs are mixed."
+  ],
+
+  "data": {
+    "raw_reads":      "raw reads (fastq)",
+    "clean_reads":    "clean reads (fastq)",
+    "read_profiles":  "read-based profiles (tsv)",
+    "contigs":        "contigs (fasta)",
+    "viral_contigs":  "viral contigs (fasta + scores)",
+    "viral_genomes":  "curated viral genomes (fasta + summary)",
+    "annotations":    "completeness + taxonomy (tsv)"
+  },
+
+  "stages": [
+    { "id": "preprocess",           "title": "Read QC & host removal",      "mode": "chain",    "consumes": "raw_reads",     "produces": "clean_reads",   "default": null },
+    { "id": "read_profiling",       "title": "Read-based profiling",        "mode": "parallel", "consumes": "clean_reads",   "produces": "read_profiles", "default": "baqlava" },
+    { "id": "assembly",             "title": "De novo assembly",            "mode": "parallel", "consumes": "clean_reads",   "produces": "contigs",       "default": "assembly" },
+    { "id": "virus_identification", "title": "Virus identification",        "mode": "parallel", "consumes": "contigs",       "produces": "viral_contigs", "default": "genomad" },
+    { "id": "virus_curation",       "title": "Decontamination & curation",  "mode": "chain",    "consumes": "viral_contigs", "produces": "viral_genomes", "default": null },
+    { "id": "characterisation",     "title": "Completeness & taxonomy",     "mode": "parallel", "consumes": "viral_genomes", "produces": "annotations",   "default": "checkv_completeness" }
+  ],
+
+  "components": [
+    { "name": "kneaddata",           "stage": "preprocess",           "status": "ready",    "tools": ["KneadData"],                     "summary": "Trim reads and remove host reads" },
+    { "name": "host_scrubber",       "stage": "preprocess",           "status": "skeleton", "tools": ["sra-human-scrubber"],            "summary": "Scrub residual human reads" },
+
+    { "name": "baqlava",             "stage": "read_profiling",       "status": "ready",    "tools": ["MetaPhlAn", "HUMAnN", "BAQLaVa"], "summary": "Bacterial depletion, then viral profiling" },
+    { "name": "phanta",              "stage": "read_profiling",       "status": "skeleton", "tools": ["Phanta"],                        "summary": "Virus-inclusive k-mer profiling" },
+    { "name": "sylph",               "stage": "read_profiling",       "status": "skeleton", "tools": ["Sylph"],                         "summary": "Containment-based profiling" },
+
+    { "name": "assembly",            "stage": "assembly",             "status": "ready",    "tools": ["MEGAHIT", "MetaBAT2", "CheckM2", "PhyloPhlAn", "Mash"], "summary": "Contigs, plus MAG binning and SGB clustering" },
+    { "name": "metaspades",          "stage": "assembly",             "status": "skeleton", "tools": ["metaSPAdes"],                    "summary": "Alternative short-read assembler" },
+
+    { "name": "genomad",             "stage": "virus_identification", "status": "skeleton", "tools": ["geNomad"],                       "summary": "Viral contigs and proviruses" },
+    { "name": "cenote_taker3",       "stage": "virus_identification", "status": "skeleton", "tools": ["Cenote-Taker 3"],                "summary": "Hallmark-gene virus discovery" },
+
+    { "name": "checkv_contamination","stage": "virus_curation",       "status": "skeleton", "tools": ["CheckV"],                        "summary": "Trim host regions from proviruses" },
+    { "name": "circular_contigs",    "stage": "virus_curation",       "status": "skeleton", "tools": ["tr-trimmer", "reorient-circular-seq"], "summary": "Trim DTRs and reorient circular genomes" },
+    { "name": "virus_rename",        "stage": "virus_curation",       "status": "skeleton", "tools": ["to be designed"],                "summary": "Stable IDs and a per-genome summary table" },
+
+    { "name": "checkv_completeness", "stage": "characterisation",     "status": "skeleton", "tools": ["CheckV"],                        "summary": "Genome completeness estimates" },
+    { "name": "virus_taxonomy",      "stage": "characterisation",     "status": "skeleton", "tools": ["MMseqs2 (ICTV)"],                "summary": "ICTV taxonomic assignment" }
+  ]
+}

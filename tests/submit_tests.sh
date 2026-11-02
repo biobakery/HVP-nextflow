@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=biobakery-nf-tests
+#SBATCH --job-name=hvp-nf-tests
 #SBATCH --partition=hsph
 #SBATCH --mem=24G
 #SBATCH --time=24:00:00
@@ -9,7 +9,7 @@
 
 # Run tests/run_tests.sh as a SLURM job, from the repo root:
 #
-#   cd /path/to/biobakery-nextflow
+#   cd /path/to/HVP-nextflow
 #   mkdir -p tests/results && sbatch tests/submit_tests.sh
 #
 # The --output paths above are relative to the submitting directory, which is
@@ -20,7 +20,7 @@
 # spool copy of this script, so $BASH_SOURCE points at /var/spool/slurmd/... and
 # not at the checkout. The BASH_SOURCE fallback is for running it directly.
 #
-# The suite runs about a dozen nextflow drivers at once, each its own JVM, which
+# The suite runs up to six nextflow drivers at once, each its own JVM, which
 # is what the memory and cpu requests are for. The drivers only submit and wait;
 # the real work happens in the SLURM jobs they spawn.
 
@@ -33,7 +33,7 @@ else
 fi
 
 if [[ ! -f "${REPO_ROOT}/tests/run_tests.sh" ]]; then
-    echo "Not a biobakery-nextflow checkout: ${REPO_ROOT}" >&2
+    echo "Not an HVP-nextflow checkout: ${REPO_ROOT}" >&2
     echo "Submit this from the repo root: cd <repo> && sbatch tests/submit_tests.sh" >&2
     exit 2
 fi

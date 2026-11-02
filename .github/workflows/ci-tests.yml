@@ -1,13 +1,15 @@
 # What can be checked without the bioBakery tool stack.
 #
-# The integration suite (tests/run_tests.sh) needs KneadData, MetaPhlAn, HUMAnN,
-# the reference databases and a SLURM cluster, so it cannot run here; see
-# tests/README.md. What runs here instead is bin/make_diagrams.py --check, which
-# rebuilds every workflow's DAG with `nextflow run -preview`. -preview resolves
-# the configuration and builds the graph without launching a task, so it needs
-# only Nextflow and a JVM -- and it still catches a config that does not parse,
-# a broken include, a channel wired to nothing, and a docs/ page that has
-# drifted from the code.
+# The integration suite (tests/run_tests.sh) needs the tools, the reference
+# databases and a SLURM cluster, so it cannot run here; see tests/README.md.
+# What runs here instead:
+#   * bin/make_diagrams.py --check: the component registry, the component
+#     files, the orchestrator and the generated docs all agree;
+#   * `nextflow run -preview` for several component selections. -preview
+#     resolves the configuration, validates the params against
+#     nextflow_schema.json and builds the graph without launching a task, so it
+#     catches a broken include, a channel wired to nothing, or a component that
+#     does not compile -- including every placeholder.
 
 name: CI
 
@@ -43,5 +45,26 @@ jobs:
       - name: Check no profile has deleted a resource request
         run: bin/check_profile_resources.py
 
-      - name: Check the diagrams and the step reference are up to date
+      - name: Check the registry, the code and the generated docs agree
         run: bin/make_diagrams.py --check
+
+      - name: Build the graph for each component selection
+        run: |
+          stubs="--host_genome /stub/hg38 --metaphlan_db /stub/metaphlan --humann_db /stub/humann --phylophlan_path /stub/phylophlan"
+          all=$(python3 -c "import json; print(','.join(c['name'] for c in json.load(open('conf/components.json'))['components']))")
+          preview() {
+            echo "== $*"
+            nextflow run main.nf -preview --outdir preview $stubs "$@"
+          }
+          preview --readsdir tests/data/rawfastq
+          preview --readsdir tests/data/single_end_rawfastq --single_end true --components kneaddata,baqlava
+          preview --readsdir tests/data/rawfastq --components baqlava
+          preview --readsdir tests/data/rawfastq --plugin genomad
+          preview --readsdir tests/data/rawfastq --components "$all"
+
+      - name: An unknown component is refused
+        run: |
+          if nextflow run main.nf -preview --readsdir tests/data/rawfastq --components nope > out.log 2>&1; then
+            echo "accepted --components nope"; exit 1
+          fi
+          grep -q "nope" out.log

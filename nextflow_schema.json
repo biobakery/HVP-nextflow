@@ -1,0 +1,393 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/biobakery/HVP-nextflow/main/nextflow_schema.json",
+  "title": "biobakery/hvp pipeline parameters",
+  "description": "Human Virome Project workflows",
+  "type": "object",
+  "$defs": {
+    "orchestration": {
+      "title": "Orchestration",
+      "type": "object",
+      "description": "Which components run. See conf/components.json.",
+      "properties": {
+        "components": {
+          "type": "string",
+          "description": "Comma-separated components to run, in any order.",
+          "default": "kneaddata,baqlava,assembly",
+          "pattern": "^(kneaddata|host_scrubber|baqlava|phanta|sylph|assembly|metaspades|genomad|cenote_taker3|checkv_contamination|circular_contigs|virus_rename|checkv_completeness|virus_taxonomy)(,(kneaddata|host_scrubber|baqlava|phanta|sylph|assembly|metaspades|genomad|cenote_taker3|checkv_contamination|circular_contigs|virus_rename|checkv_completeness|virus_taxonomy))*$",
+          "fa_icon": "fas fa-puzzle-piece"
+        },
+        "plugin": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Run one component on its own (plus preprocessing and its dependencies).",
+          "enum": [
+            "kneaddata",
+            "host_scrubber",
+            "baqlava",
+            "phanta",
+            "sylph",
+            "assembly",
+            "metaspades",
+            "genomad",
+            "cenote_taker3",
+            "checkv_contamination",
+            "circular_contigs",
+            "virus_rename",
+            "checkv_completeness",
+            "virus_taxonomy",
+            null
+          ]
+        }
+      }
+    },
+    "input_output": {
+      "title": "Input/output",
+      "type": "object",
+      "description": "",
+      "properties": {
+        "readsdir": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Folder of fastq(.gz) files. Required."
+        },
+        "outdir": {
+          "type": "string",
+          "description": "Output folder.",
+          "default": "results",
+          "format": "directory-path"
+        }
+      },
+      "required": [
+        "readsdir"
+      ]
+    },
+    "library_layout": {
+      "title": "Library layout",
+      "type": "object",
+      "description": "Detected from filenames; override only if needed.",
+      "properties": {
+        "paired_end": {
+          "type": "boolean",
+          "description": "Allow paired-end detection (false forces single-end).",
+          "default": true
+        },
+        "single_end": {
+          "type": "boolean",
+          "description": "Force single-end.",
+          "default": false
+        },
+        "pair_identifier": {
+          "type": "string",
+          "description": "Mate identifier glob fragment.",
+          "default": "_R{1,2}"
+        },
+        "filepattern": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Glob overriding the derived paired-end pattern."
+        },
+        "filepattern_single": {
+          "type": "string",
+          "description": "Glob for single-end files.",
+          "default": "*.fastq.gz"
+        }
+      }
+    },
+    "kneaddata": {
+      "title": "kneaddata component",
+      "type": "object",
+      "description": "",
+      "properties": {
+        "kneaddata_bypass_trim": {
+          "type": "boolean",
+          "description": "Skip Trimmomatic.",
+          "default": false
+        },
+        "kneaddata_remove_intermediate_files": {
+          "type": "boolean",
+          "description": "Remove KneadData intermediates.",
+          "default": true
+        },
+        "kneaddata_options": {
+          "type": "string",
+          "description": "Extra KneadData arguments.",
+          "default": ""
+        },
+        "host_genome": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "KneadData host reference database."
+        }
+      }
+    },
+    "baqlava": {
+      "title": "baqlava component",
+      "type": "object",
+      "description": "MetaPhlAn, then HUMAnN and BAQLaVa.",
+      "properties": {
+        "baqlava_humann": {
+          "type": "boolean",
+          "description": "Also run HUMAnN.",
+          "default": true
+        },
+        "baqlava_bypass_depletion": {
+          "type": "boolean",
+          "description": "Skip bacterial depletion (tiny test samples).",
+          "default": false
+        },
+        "baqlava_options": {
+          "type": "string",
+          "description": "Extra BAQLaVa arguments.",
+          "default": ""
+        },
+        "baqlava_db": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "BAQLaVa database; null uses the bundled one."
+        },
+        "metaphlan_version": {
+          "type": "string",
+          "description": "MetaPhlAn build.",
+          "default": "metaphlan_v4",
+          "enum": [
+            "metaphlan_v3",
+            "metaphlan_v4",
+            "metaphlan_4.0.6_fixed"
+          ]
+        },
+        "metaphlan_analysis_type": {
+          "type": "string",
+          "description": "MetaPhlAn -t.",
+          "default": "rel_ab_w_read_stats",
+          "enum": [
+            "rel_ab",
+            "rel_ab_w_read_stats",
+            "marker_ab_table"
+          ]
+        },
+        "metaphlan_read_min_len": {
+          "type": "integer",
+          "description": "MetaPhlAn --read_min_len.",
+          "default": 70
+        },
+        "metaphlan_options": {
+          "type": "string",
+          "description": "Extra MetaPhlAn arguments.",
+          "default": ""
+        },
+        "metaphlan_db": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "MetaPhlAn database folder."
+        },
+        "metaphlan_index": {
+          "type": "string",
+          "description": "MetaPhlAn index name.",
+          "default": "mpa_vJun23_CHOCOPhlAnSGB_202307"
+        },
+        "humann_version": {
+          "type": "string",
+          "description": "HUMAnN build.",
+          "default": "humann_v37",
+          "enum": [
+            "humann_v37",
+            "humann_v4a"
+          ]
+        },
+        "humann_bypass_prescreen": {
+          "type": "boolean",
+          "description": "HUMAnN --bypass-prescreen.",
+          "default": false
+        },
+        "humann_bypass_nucleotide_search": {
+          "type": "boolean",
+          "description": "HUMAnN --bypass-nucleotide-search.",
+          "default": false
+        },
+        "run_humann_regroup": {
+          "type": "boolean",
+          "description": "Regroup gene families.",
+          "default": true
+        },
+        "run_humann_rename": {
+          "type": "boolean",
+          "description": "Add feature names.",
+          "default": true
+        },
+        "run_humann_merge": {
+          "type": "boolean",
+          "description": "Merge per-sample tables.",
+          "default": true
+        },
+        "humann_regroup_grouping": {
+          "type": "string",
+          "description": "Regroup scheme.",
+          "default": "uniref90_rxn",
+          "enum": [
+            "uniref90_rxn",
+            "uniref90_ko",
+            "uniref90_eggnog",
+            "uniref90_pfam"
+          ]
+        },
+        "humann_rename_names": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Rename vocabulary; null derives it from the grouping."
+        },
+        "humann_options": {
+          "type": "string",
+          "description": "Extra HUMAnN arguments.",
+          "default": ""
+        },
+        "humann_db": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "HUMAnN database folder."
+        }
+      }
+    },
+    "assembly": {
+      "title": "assembly component",
+      "type": "object",
+      "description": "MEGAHIT, MAG binning and SGB clustering.",
+      "properties": {
+        "megahit_min_contig_length": {
+          "type": "integer",
+          "description": "Minimum contig length.",
+          "default": 2500
+        },
+        "sgb_completeness": {
+          "type": "number",
+          "description": "Minimum MAG completeness %.",
+          "default": 50
+        },
+        "sgb_contamination": {
+          "type": "number",
+          "description": "Maximum MAG contamination %.",
+          "default": 10
+        },
+        "sgb_abundance_type": {
+          "type": "string",
+          "description": "MAG abundance mode.",
+          "default": "by_sample",
+          "enum": [
+            "by_sample",
+            "by_dataset"
+          ]
+        },
+        "megahit_options": {
+          "type": "string",
+          "description": "Extra MEGAHIT arguments.",
+          "default": ""
+        },
+        "metabat_options": {
+          "type": "string",
+          "description": "Extra MetaBAT2 arguments.",
+          "default": ""
+        },
+        "checkm_predict_options": {
+          "type": "string",
+          "description": "Extra CheckM2 predict arguments.",
+          "default": ""
+        },
+        "checkm_coverage_options": {
+          "type": "string",
+          "description": "Extra CheckM coverage arguments.",
+          "default": ""
+        },
+        "phylophlan_metagenomic_options": {
+          "type": "string",
+          "description": "Extra PhyloPhlAn arguments.",
+          "default": ""
+        },
+        "mash_sketch_options": {
+          "type": "string",
+          "description": "Extra Mash sketch arguments.",
+          "default": ""
+        },
+        "phylophlan_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "PhyloPhlAn database folder."
+        }
+      }
+    },
+    "run": {
+      "title": "Run record and resources",
+      "type": "object",
+      "description": "",
+      "properties": {
+        "log_versions": {
+          "type": "boolean",
+          "description": "Write pipeline_info/pipeline_log.txt.",
+          "default": true
+        },
+        "validate_params": {
+          "type": "boolean",
+          "description": "Validate parameters against this schema.",
+          "default": true
+        },
+        "max_memory": {
+          "type": "string",
+          "description": "Memory ceiling per task.",
+          "default": "128.GB",
+          "pattern": "^\\d+(\\.\\d+)?\\.?\\s*(K|M|G|T)?B$"
+        },
+        "max_cpus": {
+          "type": "integer",
+          "description": "CPU ceiling per task.",
+          "default": 32
+        },
+        "max_time": {
+          "type": "string",
+          "description": "Time ceiling per task.",
+          "default": "240.h",
+          "pattern": "^(\\d+\\.?\\s*(s|m|h|d|day)\\s*)+$"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "#/$defs/orchestration"
+    },
+    {
+      "$ref": "#/$defs/input_output"
+    },
+    {
+      "$ref": "#/$defs/library_layout"
+    },
+    {
+      "$ref": "#/$defs/kneaddata"
+    },
+    {
+      "$ref": "#/$defs/baqlava"
+    },
+    {
+      "$ref": "#/$defs/assembly"
+    },
+    {
+      "$ref": "#/$defs/run"
+    }
+  ]
+}
