@@ -58,7 +58,11 @@ jobs:
             echo "== $*"
             nextflow run main.nf -preview --outdir preview $stubs "$@" 2>&1 | tee preview.log
             test "${PIPESTATUS[0]}" -eq 0
-            if grep -q "ERROR" preview.log; then echo "ERROR in preview output"; exit 1; fi
+            if grep -q "ERROR" preview.log; then
+              echo "ERROR in preview output; from .nextflow.log:"
+              grep -A15 -E "ERROR|Exception" .nextflow.log | head -60
+              exit 1
+            fi
           }
           preview --readsdir tests/data/rawfastq
           preview --readsdir tests/data/single_end_rawfastq --single_end true --components kneaddata,baqlava

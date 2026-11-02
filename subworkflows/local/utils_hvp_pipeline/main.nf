@@ -38,13 +38,18 @@ workflow PIPELINE_INITIALISATION {
 workflow PIPELINE_COMPLETION {
 
     main:
-    def outdir = params.outdir
+    // The handler only calls a function: `log` does not resolve inside the
+    // closure itself (nf-core's utils subworkflows follow the same pattern).
     workflow.onComplete {
-        if (workflow.success) {
-            log.info "[hvp] Completed. Results: ${outdir}"
-        } else {
-            log.error "[hvp] Failed. See .nextflow.log and the work directory of the failed task."
-        }
+        completionSummary()
+    }
+}
+
+def completionSummary() {
+    if (workflow.success) {
+        log.info "[hvp] Completed. Results: ${params.outdir}"
+    } else {
+        log.error "[hvp] Failed. See .nextflow.log and the work directory of the failed task."
     }
 }
 
