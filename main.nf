@@ -17,9 +17,7 @@ nextflow.enable.dsl=2
 // ═════════════════════════════════════════════════════════════════════════════
 
 include { HVP                     } from './workflows/hvp.nf'
-include { PIPELINE_INITIALISATION } from './subworkflows/local/utils_hvp_pipeline/main.nf'
-include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_hvp_pipeline/main.nf'
-include { resolveComponents       } from './subworkflows/local/utils_hvp_pipeline/main.nf'
+include { PIPELINE_INITIALISATION; PIPELINE_COMPLETION; resolveComponents } from './subworkflows/local/utils_hvp_pipeline/main.nf'
 
 // The named pipeline workflow, so the run can be imported into a larger
 // pipeline the same way nf-core pipelines are.
