@@ -38,9 +38,10 @@ workflow PIPELINE_INITIALISATION {
 workflow PIPELINE_COMPLETION {
 
     main:
+    def outdir = params.outdir
     workflow.onComplete {
         if (workflow.success) {
-            log.info "[hvp] Completed. Results: ${params.outdir}"
+            log.info "[hvp] Completed. Results: ${outdir}"
         } else {
             log.error "[hvp] Failed. See .nextflow.log and the work directory of the failed task."
         }
@@ -117,13 +118,8 @@ def resolveComponents(String components_param, String plugin) {
     log.info "[hvp] Components: ${ordered.join(' -> ')}" + (plugin ? "  (plugin mode: ${plugin})" : '')
     def skeletons = ordered.findAll { known[it].status == 'skeleton' }
     if (skeletons) {
-        log.warn "[hvp] Skeleton component(s) selected: ${skeletons.join(', ')}. They are wired in " +
+        log.warn "[hvp] Placeholder component(s) selected: ${skeletons.join(', ')}. They are wired in " +
                  "but have no tool behind them yet, so they produce no output."
     }
     return ordered
-}
-
-// Called by every skeleton component, so a run says what it skipped.
-def skeletonNotice(String name) {
-    log.warn "[hvp] ${name}: skeleton component, nothing to run yet (see docs/architecture.md, 'Adding a component')."
 }

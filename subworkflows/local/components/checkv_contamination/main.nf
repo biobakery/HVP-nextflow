@@ -1,8 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-include { skeletonNotice } from '../../utils_hvp_pipeline/main.nf'
-
 // Component: checkv_contamination · stage: virus_curation · status: skeleton
 //
 // Trim host regions from proviruses (CheckV).
@@ -19,9 +17,6 @@ workflow CHECKV_CONTAMINATION {
 
     take:
     in_genomes
-
-    main:
-    skeletonNotice('checkv_contamination')
 
     emit:
     genomes = in_genomes

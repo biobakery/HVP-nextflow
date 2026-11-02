@@ -1,8 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-include { skeletonNotice } from '../../utils_hvp_pipeline/main.nf'
-
 // Component: cenote_taker3 · stage: virus_identification · status: skeleton
 //
 // Hallmark-gene virus discovery (Cenote-Taker 3).
@@ -18,9 +16,6 @@ workflow CENOTE_TAKER3 {
 
     take:
     contigs
-
-    main:
-    skeletonNotice('cenote_taker3')
 
     emit:
     viral_contigs = Channel.empty()

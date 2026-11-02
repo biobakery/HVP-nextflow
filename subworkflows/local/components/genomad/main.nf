@@ -1,8 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-include { skeletonNotice } from '../../utils_hvp_pipeline/main.nf'
-
 // Component: genomad · stage: virus_identification · status: skeleton
 //
 // Viral contigs and proviruses (geNomad).
@@ -19,9 +17,6 @@ workflow GENOMAD {
 
     take:
     contigs
-
-    main:
-    skeletonNotice('genomad')
 
     emit:
     viral_contigs = Channel.empty()

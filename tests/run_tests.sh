@@ -150,8 +150,7 @@ check_files baqlava_noqc_pe "*_merged.fastq*" "*_BAQLaVa_profile.txt"
 
 note "Placeholders run, warn, and produce nothing"
 check_run   placeholders
-check_log   placeholders "host_scrubber: skeleton component" "host_scrubber warns"
-check_log   placeholders "phanta: skeleton component" "phanta warns"
+check_log   placeholders "Placeholder component(s) selected: host_scrubber, phanta" "placeholders are named at launch"
 
 if [ -d "${ASM_FIXTURE}" ]; then
     note "Assembly component"

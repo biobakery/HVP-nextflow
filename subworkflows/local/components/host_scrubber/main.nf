@@ -1,8 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-include { skeletonNotice } from '../../utils_hvp_pipeline/main.nf'
-
 // Component: host_scrubber · stage: preprocess · status: skeleton
 //
 // Scrub residual human reads (sra-human-scrubber).
@@ -21,9 +19,6 @@ workflow HOST_SCRUBBER {
     take:
     in_reads
     in_parts
-
-    main:
-    skeletonNotice('host_scrubber')
 
     emit:
     reads = in_reads

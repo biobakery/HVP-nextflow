@@ -1,8 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-include { skeletonNotice } from '../../utils_hvp_pipeline/main.nf'
-
 // Component: virus_rename · stage: virus_curation · status: skeleton
 //
 // Stable IDs and a per-genome summary table (to be designed).
@@ -20,9 +18,6 @@ workflow VIRUS_RENAME {
 
     take:
     in_genomes
-
-    main:
-    skeletonNotice('virus_rename')
 
     emit:
     genomes = in_genomes

@@ -1,8 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-include { skeletonNotice } from '../../utils_hvp_pipeline/main.nf'
-
 // Component: virus_taxonomy · stage: characterisation · status: skeleton
 //
 // ICTV taxonomic assignment (MMseqs2 (ICTV)).
@@ -18,9 +16,6 @@ workflow VIRUS_TAXONOMY {
 
     take:
     genomes
-
-    main:
-    skeletonNotice('virus_taxonomy')
 
     emit:
     annotations = Channel.empty()

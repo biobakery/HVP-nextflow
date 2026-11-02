@@ -1,8 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-include { skeletonNotice } from '../../utils_hvp_pipeline/main.nf'
-
 // Component: metaspades · stage: assembly · status: skeleton
 //
 // Alternative short-read assembler (metaSPAdes).
@@ -20,9 +18,6 @@ workflow METASPADES {
     take:
     reads
     parts
-
-    main:
-    skeletonNotice('metaspades')
 
     emit:
     contigs = Channel.empty()

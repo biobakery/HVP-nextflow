@@ -1,8 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-include { skeletonNotice } from '../../utils_hvp_pipeline/main.nf'
-
 // Component: circular_contigs · stage: virus_curation · status: skeleton
 //
 // Trim DTRs and reorient circular genomes (tr-trimmer, reorient-circular-seq).
@@ -20,9 +18,6 @@ workflow CIRCULAR_CONTIGS {
 
     take:
     in_genomes
-
-    main:
-    skeletonNotice('circular_contigs')
 
     emit:
     genomes = in_genomes

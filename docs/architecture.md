@@ -178,8 +178,8 @@ registry status. To implement `genomad`, for example:
 
 1. Write the module(s) under `modules/local/` (or install an nf-core module
    under `modules/nf-core/` with `nf-core modules install genomad/endtoend`).
-2. In `subworkflows/local/components/genomad/main.nf`, replace
-   `skeletonNotice(...)` and the `Channel.empty()` emits with the real calls.
+2. In `subworkflows/local/components/genomad/main.nf`, add a `main:` block
+   with the real calls, and replace the `Channel.empty()` emits.
    Keep the `take:` / `emit:` names: they are the stage contract.
 3. In `conf/components.json`, set `"status": "ready"`, and update the
    `// Component: … status:` header line to match.

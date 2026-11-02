@@ -1,8 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-include { skeletonNotice } from '../../utils_hvp_pipeline/main.nf'
-
 // Component: sylph · stage: read_profiling · status: skeleton
 //
 // Containment-based profiling (Sylph).
@@ -17,9 +15,6 @@ workflow SYLPH {
 
     take:
     reads
-
-    main:
-    skeletonNotice('sylph')
 
     emit:
     profiles = Channel.empty()

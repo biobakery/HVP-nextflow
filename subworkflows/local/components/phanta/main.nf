@@ -1,8 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-include { skeletonNotice } from '../../utils_hvp_pipeline/main.nf'
-
 // Component: phanta · stage: read_profiling · status: skeleton
 //
 // Virus-inclusive k-mer profiling (Phanta).
@@ -18,9 +16,6 @@ workflow PHANTA {
 
     take:
     reads
-
-    main:
-    skeletonNotice('phanta')
 
     emit:
     profiles = Channel.empty()

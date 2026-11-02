@@ -52,9 +52,13 @@ jobs:
         run: |
           stubs="--host_genome /stub/hg38 --metaphlan_db /stub/metaphlan --humann_db /stub/humann --phylophlan_path /stub/phylophlan"
           all=$(python3 -c "import json; print(','.join(c['name'] for c in json.load(open('conf/components.json'))['components']))")
+          # A handler error (e.g. in workflow.onComplete) is logged but does not
+          # change the exit status, so fail on any ERROR line as well.
           preview() {
             echo "== $*"
-            nextflow run main.nf -preview --outdir preview $stubs "$@"
+            nextflow run main.nf -preview --outdir preview $stubs "$@" 2>&1 | tee preview.log
+            test "${PIPESTATUS[0]}" -eq 0
+            if grep -q "ERROR" preview.log; then echo "ERROR in preview output"; exit 1; fi
           }
           preview --readsdir tests/data/rawfastq
           preview --readsdir tests/data/single_end_rawfastq --single_end true --components kneaddata,baqlava

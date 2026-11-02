@@ -1,8 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-include { skeletonNotice } from '../../utils_hvp_pipeline/main.nf'
-
 // Component: checkv_completeness · stage: characterisation · status: skeleton
 //
 // Genome completeness estimates (CheckV).
@@ -18,9 +16,6 @@ workflow CHECKV_COMPLETENESS {
 
     take:
     genomes
-
-    main:
-    skeletonNotice('checkv_completeness')
 
     emit:
     annotations = Channel.empty()
