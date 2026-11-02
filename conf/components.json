@@ -1,12 +1,14 @@
 {
   "_comment": [
     "The HVP component registry: the single source of truth for which components exist.",
-    "The orchestrator (workflows/hvp.nf) reads it at launch to validate --components / --plugin",
+    "The orchestrator (workflows/hvp.nf) reads it at launch to validate --components / --only",
     "and to resolve dependencies; bin/make_diagrams.py reads it to draw docs/diagrams/architecture.mmd.",
     "Adding a component = an entry here + subworkflows/local/components/<name>/main.nf + one call in its stage.",
     "status: ready = runs real tools; skeleton = wired but emits nothing yet (logs a warning).",
     "stage mode: chain = components run one after another, and an empty stage passes its input through;",
-    "            parallel = every selected component reads the same input and their outputs are mixed."
+    "            parallel = every selected component reads the same input and their outputs are mixed.",
+    "plugins (optional, per component): Nextflow plugins the component needs, e.g. [\"nf-foo@1.0.0\"].",
+    "Each must also be declared in the plugins block of nextflow.config; make_diagrams.py --check enforces it."
   ],
 
   "data": {

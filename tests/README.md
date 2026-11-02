@@ -19,7 +19,7 @@ tests/
 |---|---|---|
 | Registry, component files, orchestrator and docs agree | Python | `bin/make_diagrams.py --check`, CI |
 | No site profile drops a resource request | Nextflow | `bin/check_profile_resources.py`, CI |
-| Every `--components` / `--plugin` selection builds a valid graph | Nextflow | `nextflow run -preview`, CI |
+| Every `--components` / `--only` selection builds a valid graph | Nextflow | `nextflow run -preview`, CI |
 | Components produce the right output on real data | tools, databases, SLURM | `tests/run_tests.sh` |
 
 ## The integration suite
@@ -32,7 +32,7 @@ mkdir -p tests/results && sbatch tests/submit_tests.sh   # or as one batch job
 
 The cases are listed at the top of `run_tests.sh`: BAQLaVa with and without
 KneadData, the placeholders (they run, warn, and produce nothing), the assembly
-component, plugin-mode dependency resolution, and an unknown component name
+component, `--only` dependency resolution, and an unknown component name
 being refused at launch. The assembly cases need the simulated MAG fixture
 (`$ASSEMBLY_FIXTURE`, default `~/biobakery_assembly_test`) and are skipped
 without it.

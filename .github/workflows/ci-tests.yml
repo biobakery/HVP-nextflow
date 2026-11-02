@@ -33,7 +33,7 @@ jobs:
       - name: Set up Nextflow
         uses: nf-core/setup-nextflow@v2
         with:
-          version: '24.10.4'
+          version: '25.10.4'
 
       - name: Check every profile parses
         run: |
@@ -67,8 +67,15 @@ jobs:
           preview --readsdir tests/data/rawfastq
           preview --readsdir tests/data/single_end_rawfastq --single_end true --components kneaddata,baqlava
           preview --readsdir tests/data/rawfastq --components baqlava
-          preview --readsdir tests/data/rawfastq --plugin genomad
+          preview --readsdir tests/data/rawfastq --only genomad
           preview --readsdir tests/data/rawfastq --components "$all"
+
+      - name: The nf-core utilities answer --version and --help
+        run: |
+          nextflow run main.nf --version | tee out.log
+          grep -q "biobakery/hvp" out.log
+          nextflow run main.nf --help | tee out.log
+          grep -q -- "--components" out.log
 
       - name: An unknown component is refused
         run: |

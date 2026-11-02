@@ -7,7 +7,7 @@
 # Requires: the hutlab module environment loaded, and Java 21 on PATH.
 #
 # What CI cannot check -- real tools, real databases, a cluster. The graph
-# itself (every --components / --plugin selection wires up) is checked in CI by
+# itself (every --components / --only selection wires up) is checked in CI by
 # `nextflow run -preview`, and the registry by bin/make_diagrams.py --check.
 #
 #   test              components                         input
@@ -16,7 +16,7 @@
 #   baqlava_noqc_pe   baqlava (no QC: pairs concatenated) bundled paired-end
 #   placeholders      kneaddata,host_scrubber,phanta     bundled single-end
 #   assembly_pe       kneaddata,assembly                 simulated MAG fixture
-#   plugin_genomad    --plugin genomad (adds assembly)   simulated MAG fixture
+#   only_genomad      --only genomad (adds assembly)     simulated MAG fixture
 #   bad_component     --components nope                  (fails at launch)
 #
 # The runs are independent, so their nextflow drivers run in parallel; each
@@ -28,6 +28,9 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RESULTS_BASE="${REPO_ROOT}/tests/results"
 WORK_BASE="${REPO_ROOT}/tests/work"
 NF="${NF:-/n/lab_storage/huttenhower_lab/tools/nextflow/24.10.4/bin/nextflow}"
+# The pipeline needs Nextflow >= 25.10.4 (the nf-core standard); the launcher
+# above downloads and runs that version when NXF_VER asks for it.
+export NXF_VER="${NXF_VER:-25.10.4}"
 PROFILE="-profile harvard_rc"
 SE="${REPO_ROOT}/tests/data/single_end_rawfastq"
 PE="${REPO_ROOT}/tests/data/rawfastq"
@@ -130,7 +133,7 @@ nf_run placeholders --readsdir "${SE}" --single_end true \
 
 if [ -d "${ASM_FIXTURE}" ]; then
     nf_run assembly_pe    --readsdir "${ASM_FIXTURE}" --components kneaddata,assembly &
-    nf_run plugin_genomad --readsdir "${ASM_FIXTURE}" --plugin genomad &
+    nf_run only_genomad   --readsdir "${ASM_FIXTURE}" --only genomad &
 fi
 
 nf_run bad_component --readsdir "${SE}" --components kneaddata,nope --log_versions false &
@@ -157,12 +160,12 @@ if [ -d "${ASM_FIXTURE}" ]; then
     check_run   assembly_pe
     check_files assembly_pe "*.final.contigs.fa" "*.contig_depths.txt" "SGB_info.tsv" "final_profile.tsv"
 
-    note "Plugin mode resolves dependencies"
-    check_run   plugin_genomad
-    check_log   plugin_genomad "adding 'assembly'" "assembly added for genomad"
-    check_files plugin_genomad "*.final.contigs.fa"
+    note "--only resolves dependencies"
+    check_run   only_genomad
+    check_log   only_genomad "adding 'assembly'" "assembly added for genomad"
+    check_files only_genomad "*.final.contigs.fa"
 else
-    note "Assembly and plugin tests SKIPPED: no fixture at ${ASM_FIXTURE}"
+    note "Assembly and --only tests SKIPPED: no fixture at ${ASM_FIXTURE}"
 fi
 
 note "Unknown component fails at launch"

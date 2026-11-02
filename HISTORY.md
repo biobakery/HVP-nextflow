@@ -12,12 +12,16 @@ orchestrator and pluggable components on top.
   (MetaPhlAn → HUMAnN + BAQLaVa) and `assembly` are ready; host_scrubber,
   phanta, sylph, metaspades, genomad, cenote_taker3, checkv_contamination,
   circular_contigs, virus_rename, checkv_completeness and virus_taxonomy are
-  placeholders with their contracts, to be implemented as modules or plugins.
-- **Selection**: `--components a,b,c`, or `--plugin x` to run one component on
+  placeholders with their contracts, to be implemented as local modules,
+  nf-core modules or Nextflow plugins.
+- **Selection**: `--components a,b,c`, or `--only x` to run one component on
   its own; missing upstream components are added automatically.
-- **nf-core layout**: `main.nf` initialise → `BIOBAKERY_HVP` → complete,
-  `modules/local/`, `subworkflows/local/`, and parameter validation and
-  `--help` from the nf-schema plugin and `nextflow_schema.json`.
+- **nf-core standard library**: `main.nf` initialise → `BIOBAKERY_HVP` →
+  complete, built on the official nf-core utils subworkflows
+  (`utils_nextflow_pipeline`, `utils_nfcore_pipeline`, `utils_nfschema_plugin`,
+  pinned in `modules.json`) and nf-schema 2.7.3; Nextflow ≥ 25.10.4.
+- **Nextflow plugins**: declared in one place (`nextflow.config`); a component
+  that needs one lists it in `conf/components.json`, and CI checks the two agree.
 - **Generated architecture diagram** from `conf/components.json`, kept in sync
   with the code by `bin/make_diagrams.py --check` in CI.
 - **Removed** (still in biobakery-nextflow): mtx, mgx_mtx, 16s, vis, stats,

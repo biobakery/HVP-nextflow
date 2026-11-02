@@ -4,9 +4,12 @@
 Nothing here is hand-drawn. Two sources are read:
 
   conf/components.json   the registry: stages, the data each one reads and
-                         writes, and the components in each (with status)
+                         writes, and the components in each (with status and
+                         any Nextflow plugins they need)
   workflows/hvp.nf       the orchestrator, to confirm every registered
                          component is actually included and wired
+  nextflow.config        the plugins block, to confirm every plugin a
+                         component needs is declared
 
 and three things are written:
 
@@ -38,6 +41,7 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REGISTRY = os.path.join(REPO, "conf", "components.json")
+NEXTFLOW_CONFIG = os.path.join(REPO, "nextflow.config")
 ORCHESTRATOR = os.path.join(REPO, "workflows", "hvp.nf")
 COMPONENTS_DIR = os.path.join(REPO, "subworkflows", "local", "components")
 MMD = os.path.join(REPO, "docs", "diagrams", "architecture.mmd")
@@ -46,10 +50,21 @@ PAGES = [os.path.join(REPO, "README.md"), os.path.join(REPO, "docs", "architectu
 
 # ── Consistency: registry ⇄ component files ⇄ orchestrator ───────────────────
 
+def declared_plugins():
+    """{plugin id: 'id@version'} from the plugins { } block of nextflow.config."""
+    text = open(NEXTFLOW_CONFIG).read()
+    block = re.search(r"^plugins\s*\{(.*?)^\}", text, re.S | re.M)
+    if not block:
+        return {}
+    body = "\n".join(l.split("//")[0] for l in block.group(1).splitlines())
+    return {spec.split("@")[0]: spec for spec in re.findall(r"id\s+'([^']+)'", body)}
+
+
 def consistency_errors(reg):
     """Everything that would make the diagram lie about the code."""
     errors = []
     orch = open(ORCHESTRATOR).read()
+    plugins = declared_plugins()
     stage_ids = [s["id"] for s in reg["stages"]]
     data = reg["data"]
 
@@ -63,6 +78,12 @@ def consistency_errors(reg):
 
     for c in reg["components"]:
         name, wf = c["name"], c["name"].upper()
+        for spec in c.get("plugins", []):
+            pid = spec.split("@")[0]
+            if pid not in plugins:
+                errors.append(f"{name}: needs Nextflow plugin {spec}, which nextflow.config does not declare")
+            elif "@" in spec and plugins[pid] != spec:
+                errors.append(f"{name}: needs {spec}, but nextflow.config declares {plugins[pid]}")
         if c["stage"] not in stage_ids:
             errors.append(f"{name}: unknown stage '{c['stage']}'")
         if c["status"] not in ("ready", "skeleton"):
@@ -104,7 +125,7 @@ def mermaid(reg):
     out = [
         '%%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 44, "padding": 10}}}%%',
         "flowchart TB",
-        '    entry(["<b>main.nf</b> → orchestrator<br/><i>--components</i> · <i>--plugin</i>"])',
+        '    entry(["<b>main.nf</b> → orchestrator<br/><i>--components</i> · <i>--only</i>"])',
     ]
 
     for i, s in enumerate(stages, 1):
@@ -113,7 +134,8 @@ def mermaid(reg):
         out.append("        direction LR")
         for c in by_stage[s["id"]]:
             tools = ", ".join(c["tools"])
-            out.append(f'        {c["name"]}["<b>{c["name"]}</b><br/><i>{tools}</i>"]')
+            via = "".join(f"<br/>⧉ {p}" for p in c.get("plugins", []))
+            out.append(f'        {c["name"]}["<b>{c["name"]}</b><br/><i>{tools}</i>{via}"]')
         if s["mode"] == "chain":
             names = [c["name"] for c in by_stage[s["id"]]]
             for a, b in zip(names, names[1:]):
@@ -158,12 +180,13 @@ def mermaid(reg):
 
 def component_table(reg):
     titles = {s["id"]: f"{i} · {s['title']}" for i, s in enumerate(reg["stages"], 1)}
-    rows = ["| Stage | Component | Status | Tools | What it does |",
-            "|---|---|---|---|---|"]
+    rows = ["| Stage | Component | Status | Tools | Nextflow plugins | What it does |",
+            "|---|---|---|---|---|---|"]
     for c in reg["components"]:
         status = "ready" if c["status"] == "ready" else "placeholder"
+        plugins = ", ".join(f"`{p}`" for p in c.get("plugins", [])) or "—"
         rows.append(f"| {titles[c['stage']]} | `{c['name']}` | {status} | "
-                    f"{', '.join(c['tools'])} | {c['summary']} |")
+                    f"{', '.join(c['tools'])} | {plugins} | {c['summary']} |")
     return "\n".join(rows) + "\n"
 
 

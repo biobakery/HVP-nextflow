@@ -33,7 +33,7 @@ process version_log {
         echo "Date:       \$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
         echo "Version:    ${workflow.manifest.version}"
         echo "Components: ${selected.join(' -> ')}"
-        echo "Plugin:     ${params.plugin ?: '-'}"
+        echo "Only:       ${params.only ?: '-'}"
         echo ""
 
         echo "----------------------------------------------------------------"

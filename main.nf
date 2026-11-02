@@ -1,30 +1,38 @@
 #!/usr/bin/env nextflow
-nextflow.enable.dsl=2
+/*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    biobakery/hvp — Human Virome Project workflows
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Github : https://github.com/biobakery/HVP-nextflow
 
-// ═════════════════════════════════════════════════════════════════════════════
-// biobakery/hvp — Human Virome Project workflows
-//
-// Laid out the way nf-core pipelines are: initialise → named pipeline workflow
-// → complete. The pipeline itself is the HVP orchestrator (workflows/hvp.nf),
-// which runs components chosen at launch:
-//
-//   --components kneaddata,baqlava,assembly   the full orchestration (default)
-//   --plugin genomad                          one component on its own, plus the
-//                                             preprocessing and whatever it needs
-//
-// Component names, stages and status are listed in conf/components.json, and
-// drawn in docs/diagrams/architecture.mmd.
-// ═════════════════════════════════════════════════════════════════════════════
+    Laid out as the nf-core pipeline template is: initialise → named pipeline
+    workflow → complete. The pipeline itself is the HVP orchestrator
+    (workflows/hvp.nf), which runs components chosen at launch:
+
+      --components kneaddata,baqlava,assembly   the full orchestration (default)
+      --only genomad                            one component on its own, plus the
+                                                preprocessing and whatever it needs
+
+    Component names, stages and status are in conf/components.json, and drawn
+    in docs/diagrams/architecture.mmd.
+----------------------------------------------------------------------------------------
+*/
 
 include { HVP                     } from './workflows/hvp.nf'
 include { PIPELINE_INITIALISATION; PIPELINE_COMPLETION; resolveComponents } from './subworkflows/local/utils_hvp_pipeline/main.nf'
 
-// The named pipeline workflow, so the run can be imported into a larger
-// pipeline the same way nf-core pipelines are.
+/*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    NAMED WORKFLOW FOR PIPELINE
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
+
+// Named, so the run can be imported into a larger pipeline the way nf-core
+// pipelines are.
 workflow BIOBAKERY_HVP {
 
     take:
-    reads       // Channel: [ [id: sample, paired_end: bool], reads ]
+    reads       // channel: [ [id: sample, paired_end: bool], reads ]
     components  // List<String>: the components to run
 
     main:
@@ -37,14 +45,37 @@ workflow BIOBAKERY_HVP {
     annotations   = HVP.out.annotations
 }
 
+/*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    RUN MAIN WORKFLOW
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
+
 workflow {
 
-    PIPELINE_INITIALISATION(params.validate_params, params.readsdir)
+    main:
 
-    // --plugin runs a single component; otherwise --components decides.
-    def components = resolveComponents(params.components, params.plugin)
+    PIPELINE_INITIALISATION (
+        params.version,
+        params.validate_params,
+        params.monochrome_logs,
+        args,
+        params.outdir,
+        params.readsdir,
+        params.help,
+        params.help_full,
+        params.show_hidden
+    )
 
-    BIOBAKERY_HVP(PIPELINE_INITIALISATION.out.reads, components)
+    // --only runs a single component; otherwise --components decides.
+    def components = resolveComponents(params.components, params.only)
 
-    PIPELINE_COMPLETION()
+    BIOBAKERY_HVP (
+        PIPELINE_INITIALISATION.out.reads,
+        components
+    )
+
+    PIPELINE_COMPLETION (
+        params.monochrome_logs
+    )
 }

@@ -1,6 +1,6 @@
 %%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 44, "padding": 10}}}%%
 flowchart TB
-    entry(["<b>main.nf</b> → orchestrator<br/><i>--components</i> · <i>--plugin</i>"])
+    entry(["<b>main.nf</b> → orchestrator<br/><i>--components</i> · <i>--only</i>"])
     subgraph st_preprocess["<b>1 · Read QC & host removal</b> &nbsp;<i>in order</i>"]
         direction LR
         kneaddata["<b>kneaddata</b><br/><i>KneadData</i>"]

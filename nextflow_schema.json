@@ -17,7 +17,7 @@
           "pattern": "^(kneaddata|host_scrubber|baqlava|phanta|sylph|assembly|metaspades|genomad|cenote_taker3|checkv_contamination|circular_contigs|virus_rename|checkv_completeness|virus_taxonomy)(,(kneaddata|host_scrubber|baqlava|phanta|sylph|assembly|metaspades|genomad|cenote_taker3|checkv_contamination|circular_contigs|virus_rename|checkv_completeness|virus_taxonomy))*$",
           "fa_icon": "fas fa-puzzle-piece"
         },
-        "plugin": {
+        "only": {
           "type": [
             "string",
             "null"
@@ -342,11 +342,6 @@
           "description": "Write pipeline_info/pipeline_log.txt.",
           "default": true
         },
-        "validate_params": {
-          "type": "boolean",
-          "description": "Validate parameters against this schema.",
-          "default": true
-        },
         "max_memory": {
           "type": "string",
           "description": "Memory ceiling per task.",
@@ -363,6 +358,47 @@
           "description": "Time ceiling per task.",
           "default": "240.h",
           "pattern": "^(\\d+\\.?\\s*(s|m|h|d|day)\\s*)+$"
+        }
+      }
+    },
+    "generic_options": {
+      "title": "Generic options",
+      "type": "object",
+      "description": "Less common options, used by the nf-core utility subworkflows.",
+      "properties": {
+        "validate_params": {
+          "type": "boolean",
+          "description": "Validate parameters against the schema at runtime.",
+          "default": true,
+          "hidden": true
+        },
+        "help": {
+          "type": [
+            "boolean",
+            "string"
+          ],
+          "description": "Display the help text, or the help for one parameter.",
+          "hidden": true
+        },
+        "help_full": {
+          "type": "boolean",
+          "description": "Display the help text for every parameter.",
+          "hidden": true
+        },
+        "show_hidden": {
+          "type": "boolean",
+          "description": "Include hidden parameters in the help text.",
+          "hidden": true
+        },
+        "version": {
+          "type": "boolean",
+          "description": "Display the version and exit.",
+          "hidden": true
+        },
+        "monochrome_logs": {
+          "type": "boolean",
+          "description": "Do not use coloured log outputs.",
+          "hidden": true
         }
       }
     }
@@ -388,6 +424,9 @@
     },
     {
       "$ref": "#/$defs/run"
+    },
+    {
+      "$ref": "#/$defs/generic_options"
     }
   ]
 }

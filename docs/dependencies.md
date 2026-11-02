@@ -81,12 +81,15 @@ else. It is CheckM 1.2.0, GPLv3; see `bin/scripts/checkm/README.md` and
 
 ## Running the pipeline itself
 
-Nextflow 24.10.4 and a JDK 11 or newer — 21 is what the module loads. Both come
-from the hutlab module:
+Nextflow 25.10.4 or newer, as the nf-core template requires (nf-schema 2.7 needs
+it), and a JDK 17 or newer; the module loads 21. The hutlab module provides a
+24.10.4 launcher and the JDK. `NXF_VER` makes that launcher download and run
+25.10.4:
 
 ```bash
 source /n/lab_storage/huttenhower_lab/tools/hutlab/src/hutlabrc_rocky8.sh
-hutlab load rocky8/biobakery-workflows-nextflow/0.0.4   # Nextflow + JDK; no HVP module yet
+hutlab load rocky8/biobakery-workflows-nextflow/0.0.4   # Nextflow launcher + JDK
+export NXF_VER=25.10.4                                  # the pipeline needs >= 25.10.4
 ```
 
 `bin/make_diagrams.py` needs only Python. `bin/check_profile_resources.py`

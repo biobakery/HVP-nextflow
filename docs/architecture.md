@@ -9,7 +9,7 @@ component never decides what runs after it.
 ```mermaid
 %%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 44, "padding": 10}}}%%
 flowchart TB
-    entry(["<b>main.nf</b> → orchestrator<br/><i>--components</i> · <i>--plugin</i>"])
+    entry(["<b>main.nf</b> → orchestrator<br/><i>--components</i> · <i>--only</i>"])
     subgraph st_preprocess["<b>1 · Read QC & host removal</b> &nbsp;<i>in order</i>"]
         direction LR
         kneaddata["<b>kneaddata</b><br/><i>KneadData</i>"]
@@ -86,12 +86,13 @@ what is handed over.
 
 | Layer | Where | Job |
 |---|---|---|
-| Entry | `main.nf` | nf-core shape: `PIPELINE_INITIALISATION` → `BIOBAKERY_HVP` → `PIPELINE_COMPLETION`. Resolves `--components` / `--plugin` into a list of component names. |
-| Plumbing | `subworkflows/local/utils_hvp_pipeline/` | Parameter validation and `--help` (nf-schema, `nextflow_schema.json`), the input read channel, the component registry and dependency resolution. |
+| Entry | `main.nf` | nf-core shape: `PIPELINE_INITIALISATION` → `BIOBAKERY_HVP` → `PIPELINE_COMPLETION`. Resolves `--components` / `--only` into a list of component names. |
+| Plumbing | `subworkflows/local/utils_hvp_pipeline/` | Built on the standard nf-core subworkflows in `subworkflows/nf-core/` (`--version`, `--help`, parameter validation against `nextflow_schema.json`, the run summary). Adds HVP's own pieces: the input read channel, the component registry and dependency resolution. |
 | Orchestrator | `workflows/hvp.nf` | Six stages in a fixed order. Each stage runs whichever of its components were selected and passes one channel on to the next stage. |
 | Components | `subworkflows/local/components/<name>/` | One tool, or a small group of tools, behind a fixed per-stage contract. |
 | Shared blocks | `subworkflows/local/{read_input,taxonomic_profiling,functional_profiling}/` | Pieces more than one component may reuse. |
-| Modules | `modules/local/<tool>/` | One process per tool invocation. |
+| Modules | `modules/local/<tool>/`, `modules/nf-core/<tool>/` | One process per tool invocation: ported locally, or installed from nf-core/modules. |
+| nf-core library | `subworkflows/nf-core/`, `modules.json` | `utils_nextflow_pipeline`, `utils_nfcore_pipeline`, `utils_nfschema_plugin`, installed from nf-core/modules and pinned by commit. Don't edit these by hand; run `nf-core subworkflows update`. |
 | Registry | `conf/components.json` | Every stage and component, with its status. Read at launch and by `bin/make_diagrams.py`. |
 
 ## Stages
@@ -117,18 +118,18 @@ A stage reads one kind of data and writes the next one.
 # Skip read QC (reads are already clean). Pairs are concatenated for the profilers.
 --components baqlava
 
-# One component on its own: a plugin run
---plugin genomad
+# One component on its own
+--only genomad
 ```
 
-`--plugin x` runs component `x` plus the preprocessing components named in
+`--only x` runs component `x` plus the preprocessing components named in
 `--components`. In both modes, a component whose input nothing produces gets
 the producing stage's default component added, and the run logs it. For
-example, `--plugin genomad` needs contigs, so `assembly` is added:
+example, `--only genomad` needs contigs, so `assembly` is added:
 
 ```
 [hvp] 'genomad' needs contigs (fasta): adding 'assembly' (De novo assembly).
-[hvp] Components: kneaddata -> assembly -> genomad  (plugin mode: genomad)
+[hvp] Components: kneaddata -> assembly -> genomad  (--only genomad)
 ```
 
 ## Component contracts
@@ -153,45 +154,68 @@ there is no QC), for assemblers that want them.
 
 <!-- generated:components -->
 <!-- written by bin/make_diagrams.py from conf/components.json; do not edit by hand -->
-| Stage | Component | Status | Tools | What it does |
-|---|---|---|---|---|
-| 1 · Read QC & host removal | `kneaddata` | ready | KneadData | Trim reads and remove host reads |
-| 1 · Read QC & host removal | `host_scrubber` | placeholder | sra-human-scrubber | Scrub residual human reads |
-| 2 · Read-based profiling | `baqlava` | ready | MetaPhlAn, HUMAnN, BAQLaVa | Bacterial depletion, then viral profiling |
-| 2 · Read-based profiling | `phanta` | placeholder | Phanta | Virus-inclusive k-mer profiling |
-| 2 · Read-based profiling | `sylph` | placeholder | Sylph | Containment-based profiling |
-| 3 · De novo assembly | `assembly` | ready | MEGAHIT, MetaBAT2, CheckM2, PhyloPhlAn, Mash | Contigs, plus MAG binning and SGB clustering |
-| 3 · De novo assembly | `metaspades` | placeholder | metaSPAdes | Alternative short-read assembler |
-| 4 · Virus identification | `genomad` | placeholder | geNomad | Viral contigs and proviruses |
-| 4 · Virus identification | `cenote_taker3` | placeholder | Cenote-Taker 3 | Hallmark-gene virus discovery |
-| 5 · Decontamination & curation | `checkv_contamination` | placeholder | CheckV | Trim host regions from proviruses |
-| 5 · Decontamination & curation | `circular_contigs` | placeholder | tr-trimmer, reorient-circular-seq | Trim DTRs and reorient circular genomes |
-| 5 · Decontamination & curation | `virus_rename` | placeholder | to be designed | Stable IDs and a per-genome summary table |
-| 6 · Completeness & taxonomy | `checkv_completeness` | placeholder | CheckV | Genome completeness estimates |
-| 6 · Completeness & taxonomy | `virus_taxonomy` | placeholder | MMseqs2 (ICTV) | ICTV taxonomic assignment |
+| Stage | Component | Status | Tools | Nextflow plugins | What it does |
+|---|---|---|---|---|---|
+| 1 · Read QC & host removal | `kneaddata` | ready | KneadData | — | Trim reads and remove host reads |
+| 1 · Read QC & host removal | `host_scrubber` | placeholder | sra-human-scrubber | — | Scrub residual human reads |
+| 2 · Read-based profiling | `baqlava` | ready | MetaPhlAn, HUMAnN, BAQLaVa | — | Bacterial depletion, then viral profiling |
+| 2 · Read-based profiling | `phanta` | placeholder | Phanta | — | Virus-inclusive k-mer profiling |
+| 2 · Read-based profiling | `sylph` | placeholder | Sylph | — | Containment-based profiling |
+| 3 · De novo assembly | `assembly` | ready | MEGAHIT, MetaBAT2, CheckM2, PhyloPhlAn, Mash | — | Contigs, plus MAG binning and SGB clustering |
+| 3 · De novo assembly | `metaspades` | placeholder | metaSPAdes | — | Alternative short-read assembler |
+| 4 · Virus identification | `genomad` | placeholder | geNomad | — | Viral contigs and proviruses |
+| 4 · Virus identification | `cenote_taker3` | placeholder | Cenote-Taker 3 | — | Hallmark-gene virus discovery |
+| 5 · Decontamination & curation | `checkv_contamination` | placeholder | CheckV | — | Trim host regions from proviruses |
+| 5 · Decontamination & curation | `circular_contigs` | placeholder | tr-trimmer, reorient-circular-seq | — | Trim DTRs and reorient circular genomes |
+| 5 · Decontamination & curation | `virus_rename` | placeholder | to be designed | — | Stable IDs and a per-genome summary table |
+| 6 · Completeness & taxonomy | `checkv_completeness` | placeholder | CheckV | — | Genome completeness estimates |
+| 6 · Completeness & taxonomy | `virus_taxonomy` | placeholder | MMseqs2 (ICTV) | — | ICTV taxonomic assignment |
 <!-- /generated:components -->
 
 ## Adding a component
 
-A placeholder becomes real in place: only its own `main.nf` changes, plus the
-registry status. To implement `genomad`, for example:
+A placeholder becomes real in place: only its own `main.nf` changes, plus its
+registry entry. The tool behind it can come from any of three places. A
+component can mix them.
 
-1. Write the module(s) under `modules/local/` (or install an nf-core module
-   under `modules/nf-core/` with `nf-core modules install genomad/endtoend`).
+| Route | Where the code lives | Typical use |
+|---|---|---|
+| **nf-core module** | `modules/nf-core/<tool>/`, installed with `nf-core modules install <tool>` and pinned in `modules.json` | A tool nf-core already wraps: geNomad (`genomad/endtoend`), CheckV (`checkv/endtoend`), SPAdes, MEGAHIT, … Preferred when one exists. |
+| **Local module** | `modules/local/<tool>/main.nf` | A tool nf-core doesn't cover yet, or an HVP-specific script (e.g. `virus_rename`). |
+| **Nextflow plugin** | Published separately; declared in the `plugins { }` block of `nextflow.config` | Functions, channel factories or operators shared across pipelines, called from the component with `include { fn } from 'plugin/nf-<name>'`. |
+
+To implement `genomad`, for example:
+
+1. Bring in the tool. Run `nf-core modules install genomad/endtoend`, or
+   write `modules/local/genomad/main.nf`. If it comes from a Nextflow plugin,
+   add `id 'nf-<name>@<version>'` under *component plugins* in
+   `nextflow.config`.
 2. In `subworkflows/local/components/genomad/main.nf`, add a `main:` block
    with the real calls, and replace the `Channel.empty()` emits.
    Keep the `take:` / `emit:` names: they are the stage contract.
-3. In `conf/components.json`, set `"status": "ready"`, and update the
+3. In `conf/components.json`, set `"status": "ready"`, and list any Nextflow
+   plugins it needs as `"plugins": ["nf-<name>@<version>"]`. Update the
    `// Component: … status:` header line to match.
 4. Add resources for the new processes in `conf/base.config` and the module
    environment in each site profile.
-5. Run `bin/make_diagrams.py` and commit the result. The box turns blue.
+5. Run `bin/make_diagrams.py` and commit the result. The box turns blue, and a
+   plugin-backed component shows `⧉ nf-<name>` under its tools.
 
 A brand-new component works the same way. Add an entry to
 `conf/components.json`, create `subworkflows/local/components/<name>/main.nf`
 to its stage's contract, and add an include plus one `if (on('<name>'))` block
 in its stage in `workflows/hvp.nf`. `bin/make_diagrams.py --check` (run in CI)
-fails if any of these three disagree.
+fails if any of these disagree, or if a component lists a plugin that
+`nextflow.config` doesn't declare.
+
+### Why a plugin must be declared, not just installed
+
+`include { … } from 'plugin/nf-<name>'` is resolved when the pipeline is
+compiled, not when the component is selected. A missing plugin therefore stops
+every run, even one that doesn't use that component. Declaring it in
+`nextflow.config` makes Nextflow download and load it at launch. For a plugin
+only one run needs, such as provenance reporting with nf-prov, use
+`-plugins nf-prov@<version>` on the command line instead.
 
 ## Generated files
 

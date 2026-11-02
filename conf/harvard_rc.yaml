@@ -25,7 +25,7 @@
 ### Which components run (names: conf/components.json, or `--help components`)
 
 # components: "kneaddata,baqlava,assembly"    # the default: everything that is ready
-# plugin: "genomad"                           # or: one component on its own
+# only: "genomad"                             # or: one component on its own
 
 ### Library layout — detected from filenames; override only if needed
 

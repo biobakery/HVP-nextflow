@@ -17,7 +17,7 @@ contract and TODO, so whoever implements one only touches that component.
 ```mermaid
 %%{init: {"flowchart": {"curve": "basis", "nodeSpacing": 24, "rankSpacing": 44, "padding": 10}}}%%
 flowchart TB
-    entry(["<b>main.nf</b> → orchestrator<br/><i>--components</i> · <i>--plugin</i>"])
+    entry(["<b>main.nf</b> → orchestrator<br/><i>--components</i> · <i>--only</i>"])
     subgraph st_preprocess["<b>1 · Read QC & host removal</b> &nbsp;<i>in order</i>"]
         direction LR
         kneaddata["<b>kneaddata</b><br/><i>KneadData</i>"]
@@ -95,31 +95,34 @@ the stage contracts and how to add a component.
 
 <!-- generated:components -->
 <!-- written by bin/make_diagrams.py from conf/components.json; do not edit by hand -->
-| Stage | Component | Status | Tools | What it does |
-|---|---|---|---|---|
-| 1 · Read QC & host removal | `kneaddata` | ready | KneadData | Trim reads and remove host reads |
-| 1 · Read QC & host removal | `host_scrubber` | placeholder | sra-human-scrubber | Scrub residual human reads |
-| 2 · Read-based profiling | `baqlava` | ready | MetaPhlAn, HUMAnN, BAQLaVa | Bacterial depletion, then viral profiling |
-| 2 · Read-based profiling | `phanta` | placeholder | Phanta | Virus-inclusive k-mer profiling |
-| 2 · Read-based profiling | `sylph` | placeholder | Sylph | Containment-based profiling |
-| 3 · De novo assembly | `assembly` | ready | MEGAHIT, MetaBAT2, CheckM2, PhyloPhlAn, Mash | Contigs, plus MAG binning and SGB clustering |
-| 3 · De novo assembly | `metaspades` | placeholder | metaSPAdes | Alternative short-read assembler |
-| 4 · Virus identification | `genomad` | placeholder | geNomad | Viral contigs and proviruses |
-| 4 · Virus identification | `cenote_taker3` | placeholder | Cenote-Taker 3 | Hallmark-gene virus discovery |
-| 5 · Decontamination & curation | `checkv_contamination` | placeholder | CheckV | Trim host regions from proviruses |
-| 5 · Decontamination & curation | `circular_contigs` | placeholder | tr-trimmer, reorient-circular-seq | Trim DTRs and reorient circular genomes |
-| 5 · Decontamination & curation | `virus_rename` | placeholder | to be designed | Stable IDs and a per-genome summary table |
-| 6 · Completeness & taxonomy | `checkv_completeness` | placeholder | CheckV | Genome completeness estimates |
-| 6 · Completeness & taxonomy | `virus_taxonomy` | placeholder | MMseqs2 (ICTV) | ICTV taxonomic assignment |
+| Stage | Component | Status | Tools | Nextflow plugins | What it does |
+|---|---|---|---|---|---|
+| 1 · Read QC & host removal | `kneaddata` | ready | KneadData | — | Trim reads and remove host reads |
+| 1 · Read QC & host removal | `host_scrubber` | placeholder | sra-human-scrubber | — | Scrub residual human reads |
+| 2 · Read-based profiling | `baqlava` | ready | MetaPhlAn, HUMAnN, BAQLaVa | — | Bacterial depletion, then viral profiling |
+| 2 · Read-based profiling | `phanta` | placeholder | Phanta | — | Virus-inclusive k-mer profiling |
+| 2 · Read-based profiling | `sylph` | placeholder | Sylph | — | Containment-based profiling |
+| 3 · De novo assembly | `assembly` | ready | MEGAHIT, MetaBAT2, CheckM2, PhyloPhlAn, Mash | — | Contigs, plus MAG binning and SGB clustering |
+| 3 · De novo assembly | `metaspades` | placeholder | metaSPAdes | — | Alternative short-read assembler |
+| 4 · Virus identification | `genomad` | placeholder | geNomad | — | Viral contigs and proviruses |
+| 4 · Virus identification | `cenote_taker3` | placeholder | Cenote-Taker 3 | — | Hallmark-gene virus discovery |
+| 5 · Decontamination & curation | `checkv_contamination` | placeholder | CheckV | — | Trim host regions from proviruses |
+| 5 · Decontamination & curation | `circular_contigs` | placeholder | tr-trimmer, reorient-circular-seq | — | Trim DTRs and reorient circular genomes |
+| 5 · Decontamination & curation | `virus_rename` | placeholder | to be designed | — | Stable IDs and a per-genome summary table |
+| 6 · Completeness & taxonomy | `checkv_completeness` | placeholder | CheckV | — | Genome completeness estimates |
+| 6 · Completeness & taxonomy | `virus_taxonomy` | placeholder | MMseqs2 (ICTV) | — | ICTV taxonomic assignment |
 <!-- /generated:components -->
 
 ## Quick start
 
-Harvard FASRC, everything that is ready (KneadData → BAQLaVa, and assembly):
+Harvard FASRC, everything that is ready (KneadData → BAQLaVa, and assembly).
+The pipeline needs Nextflow ≥ 25.10.4, the current nf-core standard. The
+hutlab launcher is 24.10.4, so set `NXF_VER`; it downloads 25.10.4 on first use:
 
 ```sh
 source /n/lab_storage/huttenhower_lab/tools/hutlab/src/hutlabrc_rocky8.sh
-hutlab load rocky8/biobakery-workflows-nextflow/0.0.4    # Nextflow + JDK
+hutlab load rocky8/biobakery-workflows-nextflow/0.0.4    # Nextflow launcher + JDK
+export NXF_VER=25.10.4
 
 nextflow run main.nf -profile harvard_rc \
   --readsdir /path/to/fastqs \
@@ -142,9 +145,9 @@ node's `/tmp`.
 # BAQLaVa without HUMAnN
 --baqlava_humann false
 
-# One component on its own (plugin mode). genomad needs contigs, so the
+# One component on its own. genomad needs contigs, so the
 # assembly component is added automatically. genomad is still a placeholder.
---plugin genomad
+--only genomad
 ```
 
 ### Demo (bundled single-end sample)
@@ -161,23 +164,44 @@ nextflow run main.nf -profile harvard_rc \
 ```sh
 nextflow run main.nf --help                 # every parameter, from nextflow_schema.json
 nextflow run main.nf --help components      # one parameter in detail
+nextflow run main.nf --version
 ```
 
 Parameters are validated against `nextflow_schema.json` at launch by the
-[nf-schema](https://nextflow-io.github.io/nf-schema/) plugin. Turn that off with
+[nf-schema](https://nextflow-io.github.io/nf-schema/) plugin, through the
+standard nf-core utility subworkflows. Turn that off with
 `--validate_params false`. Defaults live in `conf/params.config`.
+
+## nf-core and Nextflow plugins
+
+- **nf-core library.** `subworkflows/nf-core/` holds `utils_nextflow_pipeline`,
+  `utils_nfcore_pipeline` and `utils_nfschema_plugin`, installed from
+  [nf-core/modules](https://github.com/nf-core/modules) and pinned in
+  `modules.json`. Update them with `nf-core subworkflows update`. nf-core tool
+  modules go in `modules/nf-core/` (`nf-core modules install <tool>`).
+- **Nextflow plugins.** Every plugin the pipeline loads is declared in the
+  `plugins { }` block of `nextflow.config`: nf-schema, plus any plugin a
+  component is built on. A component lists the plugins it needs in
+  `conf/components.json`, and CI checks they're declared. For a one-off plugin,
+  use `-plugins nf-<name>@<version>`.
+
+See [docs/architecture.md](docs/architecture.md#adding-a-component) for the
+three ways to implement a component: nf-core module, local module or Nextflow
+plugin.
 
 ## Layout
 
 ```
 main.nf                                  entry: init → BIOBAKERY_HVP → completion
 workflows/hvp.nf                         the orchestrator (six stages)
+subworkflows/nf-core/                    nf-core utility subworkflows (pinned in modules.json)
 subworkflows/local/
-  utils_hvp_pipeline/                    validation, input channel, component registry
+  utils_hvp_pipeline/                    init/completion on the nf-core utils; input channel; component registry
   components/<name>/main.nf              one component each: ready or placeholder
   read_input/ taxonomic_profiling/ functional_profiling/   shared building blocks
 modules/local/<tool>/main.nf             one process per tool invocation
-conf/components.json                     the component registry
+conf/components.json                     the component registry (stages, status, plugins)
+modules.json                             nf-core modules/subworkflows and their pinned commits
 conf/params.config                       every parameter's default
 conf/base.config                         default resources per process
 conf/profiles/, conf/databases/          per-site runtime and database paths
@@ -222,7 +246,7 @@ sbatch tests/submit_tests.sh         # integration suite on FASRC (tools + datab
 ```
 
 CI runs the first two plus `nextflow run -preview` for the default, read-only,
-no-QC and plugin selections. That builds the whole graph without running a task.
+no-QC and `--only` selections. That builds the whole graph without running a task.
 
 ## History
 
