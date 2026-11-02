@@ -1,5 +1,31 @@
 # Release history
 
+## 0.1.0dev — HVP orchestrator
+
+Forked from biobakery-nextflow 0.0.4 and cut down to what HVP needs, with an
+orchestrator and pluggable components on top.
+
+- **Orchestrator** (`workflows/hvp.nf`): six stages — read QC & host removal,
+  read-based profiling, assembly, virus identification, curation, completeness
+  & taxonomy — each running whichever components were selected.
+- **Components** (`subworkflows/local/components/`): `kneaddata`, `baqlava`
+  (MetaPhlAn → HUMAnN + BAQLaVa) and `assembly` are ready; host_scrubber,
+  phanta, sylph, metaspades, genomad, cenote_taker3, checkv_contamination,
+  circular_contigs, virus_rename, checkv_completeness and virus_taxonomy are
+  placeholders with their contracts, to be implemented as modules or plugins.
+- **Selection**: `--components a,b,c`, or `--plugin x` to run one component on
+  its own; missing upstream components are added automatically.
+- **nf-core layout**: `main.nf` initialise → `BIOBAKERY_HVP` → complete,
+  `modules/local/`, `subworkflows/local/`, and parameter validation and
+  `--help` from the nf-schema plugin and `nextflow_schema.json`.
+- **Generated architecture diagram** from `conf/components.json`, kept in sync
+  with the code by `bin/make_diagrams.py --check` in CI.
+- **Removed** (still in biobakery-nextflow): mtx, mgx_mtx, 16s, vis, stats,
+  StrainPhlAn, and the `--workflow` router.
+
+The history below is biobakery-nextflow's.
+
+
 ## 0.0.4 — TBD
 
 Everything else in upstream 3.2, plus a layout cleanup. ~8,500 lines and 61 new
