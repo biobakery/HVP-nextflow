@@ -40,7 +40,7 @@ that.
 | Bracken, Python, pandas, numpy | Pin exact versions in the Phanta container; record what the baseline resolved to. **Resolved:** bracken 3.1, python 3.10.22, pandas 2.3.3, numpy 2.2.6 (also biopython 1.88, snakemake 7.15.2). Locked by URL + checksum in `containers/phanta/conda-lock.txt` |
 | Phanta image | One digest in `public.ecr.aws`; every profile references it (convention 4). **Built** as `containers/phanta/` (`linux/amd64`, 1.73 GB); **not yet pushed**, so no digest exists yet. Locally the image is referenced by tag `phanta:0.0.5-dev` from `conf/profiles/local_docker.config` — see [Appendix F](#appendix-f-implementation-notes-from-the-port) |
 | Tiny test database | `tests/fixtures/phanta/tiny_db/db/`, built and committed. `inspect.out` sha256 `554c323f5357f20cfd5372350676d1f55e3fc5a209015c0310c2180e7e5e299e` — the value `phanta_db_expected_inspect_sha256` takes for tiny-database runs |
-| Nextflow | `24.10.4` — what `tests/run_tests.sh` pins; `manifest.nextflowVersion` is `>= 24.04.0`. **Note:** Nextflow 26.x rejects `conf/base.config` outright (its stricter config parser refuses the top-level `def check_max(obj, type)` at line 206). This is a repo-wide incompatibility, not a Phanta one. `NXF_SYNTAX_PARSER=v1` is the workaround if a 26.x launcher is all that is available |
+| Nextflow | `24.10.4` — what `tests/run_tests.sh` pins; `manifest.nextflowVersion` is `>= 24.04.0`. **Note:** Nextflow 26.x rejects this repo's config outright. **Corrected 2026-11-12:** the cause is broader than first recorded — it is not only `def check_max(obj, type)` at `conf/base.config:206`. Nextflow 26's parser rejects *any* top-level `def` in a config file, variables included ("Variable declarations cannot be mixed with config statements"), which covers `conf/base.config`, `conf/reports.config`, `conf/profiles/harvard_rc.config` and `conf/profiles/local_docker.config`. There is therefore no Phanta-only fix. Repo-wide, and pre-dating this work. `NXF_SYNTAX_PARSER=v1` is the workaround if a 26.x launcher is all that is available. `manifest.nextflowVersion` is now `'>=24.04.0, <26.0.0'` — the lower bound is unchanged, so nothing is pinned forward; the upper bound only stops the repo claiming support it does not have. Note it does **not** improve the error: config parsing fails before the manifest is read |
 | Java | 21 |
 | `manifest.version` | currently `0.0.4`; bump to `0.0.5` with the Phanta release |
 | Upstream fixtures | `<phanta>/testing/{classification,final_merged_outputs}/` |
@@ -714,8 +714,9 @@ setting two variables and pointing `phanta_db` somewhere real.
    on AWS: run the same case twice, confirm scientific tasks are cached.
 4. Run the full-database workflow on AWS. Require byte-identical output against
    the full-database baseline.
-5. **FASRC parity.** Resolve open question 2 first. Pull the ECR digest with
-   Apptainer via `def env_phanta`; stage the database on shared storage with
+5. **FASRC parity.** ~~Resolve open question 2 first.~~ Answered: Apptainer,
+   so the AWS image digest is reused unchanged and the AWS baseline applies.
+   Pull the ECR digest with Apptainer via `def env_phanta`; stage the database on shared storage with
    node-local scratch; add `phanta_db` and the expected checksum to
    `conf/databases/harvard_rc.config`; run the same Phanta cases with the
    default `PROFILE`; require byte-identity against the **AWS-generated**
@@ -837,8 +838,10 @@ Each is tagged with the phase it blocks.
 2. **The database decision** (blocks phase 1, not phase 0): open question 1 —
    or permission to proceed with `unmasked_db_v1.01.tar.gz` pending signoff.
    Phase 0 and the tiny-DB work need no answer.
-3. **FASRC container policy** (blocks phase 3 step 5): open question 2, plus a
-   shared-storage path for the 25 GB database.
+3. **FASRC container policy** (blocks phase 3 step 5): ~~open question 2~~
+   **answered — Apptainer/Singularity, no Docker.** Still needed: a
+   shared-storage path for the 25 GB database, and the four Apptainer details
+   listed in `conf/profiles/harvard_rc.config`.
 4. **The acceptance cohort** (blocks phase 3 step 6): open question 4.
 5. **Repo access** if not on this machine: a clone URL plus the commits in
    "Pinned artifacts".
@@ -855,11 +858,40 @@ Resolve with the named owner; record the answer here.
    scientific: Phanta's default database is human-gut specific, so confirm it
    fits HVP's sample types. *Domain scientist confirms; engineer records
    filename, SHA256, date. Gates phase 1.*
-2. **Does FASRC permit Apptainer for this stack?** If yes, `def env_phanta`
-   pulls the ECR digest and byte-identity with AWS holds. If FASRC requires a
-   hutlab module instead, byte-identity across sites is **not** guaranteed and
-   FASRC gets its own baseline — record that explicitly. *Platform engineer.
-   Gates phase 3 step 5, not AWS work.*
+
+   **HALF ANSWERED 2026-11-12 — ~~which artifact~~, not yet whether it
+   suits HVP.** ~~`database_V1.tar.gz` vs `unmasked_db_v1.01.tar.gz`~~ was never
+   a real choice: an HTTP HEAD shows different sizes and dates (24,136,706,906
+   bytes / Dec 2022 vs 24,146,259,068 bytes / Jul 2023), so the README link is
+   simply **stale** — it points at the superseded original. **Use
+   `unmasked_db_v1.01.tar.gz`.** Reasoning, the HEAD evidence, and why the
+   similarly-named `database_V1.library.tar.gz` is a third artifact rather than
+   a candidate are in `docs/phanta_migration_decisions.md` section 7.
+
+   **Still open, and still a domain-scientist call:** whether a human-gut
+   database suits HVP's sample types at all, or whether one of the other
+   catalogue rows (GTDB taxonomy, UHGGv2, the UHGV viral catalogue, or MAGIC
+   for early-life samples) fits better. That half still gates phase 1; the
+   engineer still records filename, SHA256 and date at download.
+2. ~~**Does FASRC permit Apptainer for this stack?**~~ **ANSWERED — no Docker,
+   Apptainer/Singularity instead.** This is the outcome byte-identity needed.
+   A Singularity-family runtime runs an OCI/Docker image directly, converting
+   it to a SIF on pull, so the **same image digest** runs at both sites and the
+   AWS baseline still applies. Nothing about the image changes; only how it is
+   fetched (`docker://` prefix). The bad branch — a hutlab module built from
+   different packages, which would have forced FASRC its own baseline — did not
+   happen.
+
+   `conf/profiles/harvard_rc.config` already loaded the `apptainer` module in
+   `env_phanta`, but **never enabled the engine**, so Nextflow would have
+   ignored the `container` directive and run Phanta on the bare PATH. An
+   `apptainer { enabled = true; autoMounts = true }` block was added. Four
+   site-specific details are listed in that file for the platform engineer to
+   confirm before the first real run: a shared `cacheDir` (otherwise every job
+   re-pulls 1.7 GB and concurrent jobs race), whether `apptainer` is on PATH at
+   *submit* time as well as inside the job, whether the module is named
+   `apptainer` or `singularity`, and which filesystems need an explicit bind.
+   *Platform engineer. Gates phase 3 step 5, not AWS work.*
 3. ~~**Tiny database committed or downloaded?** Depends on achieved size.~~
    **ANSWERED — committed.** The built database is 5.4 MB and the synthetic
    reads 0.4 MB, 5.8 MB in total, so hosting plus a checksummed fetch in

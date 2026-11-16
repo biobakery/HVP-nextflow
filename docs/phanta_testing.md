@@ -291,3 +291,8 @@ them**: node descriptions are dropped and identifiers are mangled
 (`_kraken2_("<b>"kraken2"</b>")`). The committed diagrams are correct and the
 check passes on the pinned 24.10.4. Do not commit diagrams regenerated under
 Nextflow 26, however loudly the check asks for it.
+
+**Guarded as of 2026-11-12.** `bin/make_diagrams.py` now reads `nextflow -v`
+and refuses to run at all on 26.x, rather than reporting false staleness and
+then corrupting what it was asked to check. The guard is an upper bound only:
+24.x and 25.x are unaffected, and nothing is pinned to a newer Nextflow.

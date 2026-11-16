@@ -236,6 +236,36 @@ fields are asserted by a `run_tests.sh` case with `grep` instead.
 `unmasked_db_v1.01.tar.gz`), pin it by filename and SHA256 computed at download,
 and use it for both the upstream baseline and all HVP runs.
 
+**RESOLVED 2026-11-12 — `unmasked_db_v1.01.tar.gz`, settled by evidence rather
+than by preference.** The recommendation below was a judgment call about which
+upstream doc to trust. An HTTP HEAD against all three URLs decided it without
+downloading anything:
+
+| Artifact | Size (bytes) | Last modified |
+| --- | --- | --- |
+| `unmasked_db_v1.01.tar.gz` | 24,146,259,068 | 2023-07-20 |
+| `database_V1.tar.gz` | 24,136,706,906 | 2022-12-04 |
+| `database_V1.library.tar.gz` | 23,280,013,030 | 2023-08-04 |
+
+Different sizes, so the two candidates are **different builds** — not two names
+for one file. The delta is 9.5 MB in 24 GB (0.04%), consistent with a patch
+(genomes added, or a taxonomy correction) rather than a rebuild. `database_V1`
+is the December 2022 original; `unmasked_db_v1.01` is its July 2023 successor,
+and the `databases.md` row carrying it is the one labelled "as described in our
+manuscript". The README link was never updated alongside it.
+
+The `.library` tarball is a **third artifact**, not a candidate: FASTA files for
+the source genomes, which Kraken2 and Bracken never read. It still carries the
+`database_V1` prefix only because nobody renamed it when the index was bumped
+— that naming lineage is the entire reason the two candidates looked related,
+and it is easy to misread the catalogue's default row as referencing both
+candidates when it references the database and its genome supplement.
+
+A reader comparing dates may notice that the manuscript predates `v1.01` by
+eight months, so the literal artifact the paper was run on was `database_V1`.
+Upstream nonetheless presents `v1.01` as the manuscript database in its
+maintained catalogue, and we follow the maintained catalogue.
+
 Upstream contradicts itself about which database is "the default":
 
 | Upstream source | Artifact |
@@ -262,7 +292,18 @@ the catalogue as a moving target to re-verify at each baseline refresh.
 costs a second 25 GB transfer and changes nothing, because we control which
 database both sides of the comparison use.
 
-The remaining question is scientific, not technical: Phanta's default database
+*Answered without the transfer, and worth keeping for the general case:* a
+checksum comparison would not have been conclusive anyway. A `.tar.gz` embeds
+packaging metadata — mtimes, uid/gid, permissions, entry order, plus gzip's own
+timestamp and compression level — so two tarballs packed from identical trees at
+different times differ. A match proves identity; a mismatch proves nothing. The
+identity that matters is content-derived, which is why `phanta_db_manifest`
+records the SHA256 of `inspect.out` rather than of the tarball, and why that is
+the field the fail-fast guard compares. Sizes differing settled this case for
+free; had they matched, the test would have been to extract both and compare
+`inspect.out`.
+
+The remaining question is scientific, not technical, and **is still open**: Phanta's default database
 was built from human-gut viral and bacterial genomes, so its suitability for
 HVP's sample types needs domain-scientist confirmation. Upstream's
 `databases.md` says as much and points non-gut users toward custom databases.
@@ -275,8 +316,8 @@ noted; each 20-25 GB.
 
 | Database | Artifact | Prokaryotic | Viral | Taxonomy |
 | --- | --- | --- | --- | --- |
-| Default (per `databases.md`) | `unmasked_db_v1.01.tar.gz` | HumGut | MGV + RefSeq viral | NCBI |
-| Default (per `README.md`) | `database_V1.tar.gz` | HumGut | MGV + RefSeq viral | NCBI |
+| **Default — SELECTED** (per `databases.md`) | `unmasked_db_v1.01.tar.gz` | HumGut | MGV + RefSeq viral | NCBI |
+| Superseded Jul 2023; stale `README.md` link | `database_V1.tar.gz` | HumGut | MGV + RefSeq viral | NCBI |
 | Prophage-masked default | `masked_db_v1.tar.gz` | HumGut | MGV + RefSeq viral | NCBI |
 | Default, GTDB taxonomy | `unmasked_db_v1_gtdb.tar.gz` | HumGut | MGV + RefSeq viral | GTDB |
 | UHGGv2 + MGV | `uhgg2_mgv_v1.tar.gz` | UHGGv2 | MGV + RefSeq viral | GTDB |

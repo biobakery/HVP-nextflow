@@ -871,6 +871,18 @@ def make_stubs(work):
     return {"work": work, "reads": reads, "folder": folder, "samplesheet": samplesheet}
 
 
+def nextflow_version():
+    """(major, minor) of the nextflow on PATH, or None if it cannot be read."""
+    try:
+        out = subprocess.run(["nextflow", "-v"], stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT, text=True,
+                             timeout=120).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    match = re.search(r"version (\d+)\.(\d+)", out)
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true",
@@ -880,6 +892,26 @@ def main():
     if not shutil.which("nextflow"):
         sys.exit("ERROR: nextflow is not on PATH. On FASRC:\n"
                  "  hutlab load rocky8/biobakery-workflows-nextflow/0.0.4")
+
+    # Nextflow 26 changed the mermaid the DAG export emits: node identifiers are
+    # no longer `vN`, which NODE_PROCESS above matches, and the process
+    # descriptions are dropped entirely. The failure is quiet and misleading --
+    # `--check` reports every diagram stale, including workflows nobody touched,
+    # and regenerating "succeeds" while replacing correct diagrams with
+    # corrupted ones. Refuse instead, because the suggested remedy is the damage.
+    version = nextflow_version()
+    if version is not None and version >= (26, 0):
+        sys.exit(
+            f"ERROR: Nextflow {version[0]}.{version[1]:02d} cannot generate "
+            "these diagrams.\n"
+            "Its DAG export uses node identifiers this script does not parse, "
+            "and drops\nevery process description. Running anyway would report "
+            "all diagrams stale and\nthen overwrite correct ones with corrupted "
+            "output.\n\n"
+            "This repo is tested on Nextflow 24.10.4. On FASRC:\n"
+            "  export PATH=/n/lab_storage/huttenhower_lab/tools/nextflow/"
+            "24.10.4/bin:$PATH\n"
+        )
 
     docs = os.path.join(REPO, "docs")
     with tempfile.TemporaryDirectory(prefix="biobakery_nf_dag_") as tmp:
